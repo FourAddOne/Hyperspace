@@ -3,6 +3,7 @@ package com.lihuahua.hyperspace.service;
 import com.lihuahua.hyperspace.mapper.MessageMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +14,7 @@ import java.util.Date;
  * 定期清理过期消息以节省数据库空间
  */
 @Service
+@Slf4j
 public class MessageCleanupService {
     
     @Resource
@@ -43,6 +45,7 @@ public class MessageCleanupService {
      */
     @PostConstruct
     public void init() {
-        System.out.println("消息清理服务已启动，将每天凌晨2点清理30天前的消息");
+        log.info("消息清理服务已启动，将每天凌晨2点清理30天前的消息");
+
     }
 }
