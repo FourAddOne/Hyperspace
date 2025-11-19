@@ -1,7 +1,7 @@
 package com.lihuahua.hyperspace.controller.user;
 
-
-import com.aliyun.oss.OSS;
+import com.lihuahua.hyperspace.enums.LoginFail;
+import com.lihuahua.hyperspace.exception.LoginException;
 import com.lihuahua.hyperspace.models.dto.LoginDTO;
 import com.lihuahua.hyperspace.models.entity.User;
 import com.lihuahua.hyperspace.models.vo.ResVO;
@@ -10,100 +10,108 @@ import com.lihuahua.hyperspace.server.UserServer;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import jakarta.annotation.Resource;
+import org.springframework.web.bind.annotation.*;
 
-/**
- * 用户登录控制器
- * 处理用户登录和注销相关的HTTP请求
- */
-@RestController("loginUserController")
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
+@Tag(name = "用户登录接口")
+@RestController
 @RequestMapping("/user")
-@Tag(name = "用户登录模块", description = "处理用户登录和注销相关接口")
 public class loginController {
 
-    /**
-     * 用户服务类，处理用户相关的业务逻辑
-     */
-    @Autowired
+    @Resource
     private UserServer userServer;
 
-    /**
-     * 阿里云OSS客户端，用于文件存储操作
-     */
-    @Autowired
-    private OSS ossClient;
-
-    /**
-     * 日志记录器，用于记录控制器中的操作日志
-     */
-    private final Logger logger = LoggerFactory.getLogger(loginController.class);
-
-    /**
-     * 用户登录接口
-     * 
-     * @param loginUser 包含用户名和密码的登录信息DTO
-     * @return 登录结果，成功时返回用户信息和token，失败时返回错误信息
-     */
+    @Operation(summary = "用户登录")
     @PostMapping("/login")
-    @Operation(summary = "用户登录", description = "根据用户名和密码进行用户身份验证")
-    public ResVO login(@RequestBody LoginDTO loginUser) {
+    public ResVO<UserLoginVO> login(@RequestBody LoginDTO loginUser) {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("userId", loginUser.getUserId());
+        credential.put("email", loginUser.getEmail());
+        credential.put("password", loginUser.getPassword());
+        credential.put("ip", loginUser.getIp());
 
-        try{
-            // 调用用户服务进行登录验证
-            Boolean result = userServer.login(loginUser);
-            if(result){
-                // 登录成功，获取用户详细信息
-                User user = userServer.getPersionInfo(loginUser);
-                // 构造返回给前端的用户信息对象
-                UserLoginVO ResUser = UserLoginVO.builder()
-                        .userId(user.getUserId())
-                        .userName(user.getUserName())
-                        .email(user.getEmail())
-                        .avatarUrl((user.getAvatarUrl()))
-                        .Ip(loginUser.getIp())
-                        .build();
-
-                ResUser.setAccessToken(JwtTokenUtil.generateShortToken(loginUser.getUserId()));
-                ResUser.setRefreshToken(JwtTokenUtil.generateLongToken(loginUser.getUserId()));
-
-                return ResVO.success(ResUser);
-            }else{
-                return ResVO.fail("密码错误");
+        try {
+            UserLoginVO resUser = userServer.login(credential);
+            // 确保返回的accessToken不为null
+            if (resUser.getAccessToken() == null || resUser.getAccessToken().isEmpty()) {
+                return ResVO.fail("登录失败：无法生成访问令牌");
             }
-        }catch (Exception e){
+            return ResVO.success(resUser);
+        } catch (Exception e) {
             return ResVO.fail(e.getMessage());
         }
-
     }
 
-    /**
-     * 用户注销接口
-     * 
-     * @param user 包含用户信息的DTO
-     * @return 注销结果，成功或失败信息
-     */
+    @Operation(summary = "用户注销")
     @PostMapping("/logout")
-    @Operation(summary = "用户注销", description = "用户退出登录状态")
-    public ResVO logout(@RequestBody LoginDTO user) {
-        try{
-            // 调用用户服务进行注销操作
-            Boolean result = userServer.logout(user);
-            if(result){
+    public ResVO<String> logout(@RequestHeader("Authorization") String token) {
+        try {
+            // 移除 "Bearer " 前缀
+            String jwt = token.replace("Bearer ", "");
+            
+            // 验证并获取用户ID
+            String userId = JwtTokenUtil.validateToken(jwt);
+            
+            // 即使token无效，我们也应该清除本地状态
+            if (userId != null) {
+                // 如果用户ID有效，则执行登出逻辑
+                Boolean result = userServer.logout(userId);
+                if (result) {
+                    // 从Redis中移除token
+                    JwtTokenUtil.removeTokenFromRedis(userId);
+                    return ResVO.success("注销成功");
+                }
+            } else {
+                // 如果token无效，仍然返回成功，因为用户已经处于登出状态
                 return ResVO.success("注销成功");
-            }else{
-                return ResVO.fail("注销失败");
             }
-        }catch (Exception e){
+            
+            return ResVO.fail("注销失败");
+        } catch (Exception e) {
+            // 即使出现异常，也认为登出成功，确保用户能够登出
+            return ResVO.success("注销成功");
+        }
+    }
+
+    @Operation(summary = "获取用户信息")
+    @GetMapping("/info")
+    public ResVO<UserLoginVO> getUserInfo(@RequestHeader("Authorization") String token) {
+        try {
+            String userId = JwtTokenUtil.validateToken(token.replace("Bearer ", ""));
+            if (userId != null) {
+                UserLoginVO userInfo = userServer.getUserInfo(userId);
+                return ResVO.success(userInfo);
+            }
+            return ResVO.fail("无效的token");
+        } catch (Exception e) {
             return ResVO.fail(e.getMessage());
         }
+    }
 
-
+    @Operation(summary = "更新头像")
+    @PostMapping("/avatar")
+    public ResVO<String> updateAvatar(@RequestHeader("Authorization") String token,
+                                       @RequestParam("avatarUrl") String avatarUrl) {
+        try {
+            System.out.println("开始更新头像，token: " + token + ", avatarUrl: " + avatarUrl);
+            String userId = JwtTokenUtil.validateToken(token.replace("Bearer ", ""));
+            System.out.println("解析出的用户ID: " + userId);
+            if (userId != null) {
+                Boolean result = userServer.updateAvatar(userId, avatarUrl);
+                System.out.println("更新头像结果: " + result);
+                if (result) {
+                    return ResVO.success("头像更新成功");
+                }
+            }
+            return ResVO.fail("头像更新失败");
+        } catch (Exception e) {
+            System.err.println("更新头像异常: " + e.getMessage());
+            e.printStackTrace();
+            return ResVO.fail(e.getMessage());
+        }
     }
 }

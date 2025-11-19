@@ -1,36 +1,54 @@
 package com.lihuahua.hyperspace.controller.user;
 
 import com.lihuahua.hyperspace.models.dto.RegisterDTO;
+import com.lihuahua.hyperspace.models.entity.User;
 import com.lihuahua.hyperspace.models.vo.ResVO;
+import com.lihuahua.hyperspace.models.vo.UserLoginVO;
 import com.lihuahua.hyperspace.server.UserServer;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
+import com.lihuahua.hyperspace.utils.JwtTokenUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController("registerUserController")
+import java.util.HashMap;
+import java.util.Map;
+
+@Tag(name = "用户注册接口")
+@RestController
 @RequestMapping("/user")
 public class RegisterController {
 
-    @Autowired
+    @Resource
     private UserServer userServer;
 
-/**
- * 处理用户注册请求的接口方法
- * @param user 包含用户注册信息的RegisterDTO对象
- * @return 返回注册结果信息字符串
- */
+    @Operation(summary = "用户注册")
     @PostMapping("/register")
-    public ResVO register(@RequestBody RegisterDTO  user) {
+    public ResVO<UserLoginVO> register(@RequestBody RegisterDTO user) {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("username", user.getUserName());
+        credential.put("password", user.getPassword());
+        credential.put("email", user.getEmail());
+        credential.put("ip", user.getIp());
+
         try {
-        // 调用服务层处理用户注册逻辑
-            userServer.register(user);
-        // 注册成功，返回成功信息
-            return ResVO.success("注册成功");
+            Boolean result = userServer.register(credential);
+            if (result) {
+                // 注册成功后自动登录
+                Map<String, String> loginCredential = new HashMap<>();
+                loginCredential.put("email", user.getEmail());
+                loginCredential.put("password", user.getPassword());
+                loginCredential.put("ip", user.getIp());
+                
+                UserLoginVO resUser = userServer.login(loginCredential);
+                return ResVO.success(resUser);
+            } else {
+                return ResVO.fail("注册失败");
+            }
         } catch (Exception e) {
-        // 注册失败，返回失败信息
             return ResVO.fail(e.getMessage());
         }
     }
