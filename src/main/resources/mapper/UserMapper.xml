@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lihuahua.hyperspace.mapper.UserMapper">
+	<update id="updateLastMessageTime">
+		UPDATE "user" SET last_read_ts = #{date.time} WHERE user_id = #{userId}
+	</update>
+	
+	<select id="getUserByUserName" resultType="com.lihuahua.hyperspace.models.po.UserPO">
+		select * from "user" where user_name = #{username}
+	</select>
+	
+	<select id="getUserInfoById" resultType="com.lihuahua.hyperspace.models.pojo.UserInfo">
+		SELECT
+			user_id AS userId,
+			user_name AS username,
+			avatar_url AS avatarUrl
+		FROM "user"
+		WHERE user_id = #{userId}
+	</select>
+
+
+</mapper>

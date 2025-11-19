@@ -2,9 +2,8 @@ package com.lihuahua.hyperspace.controller.user;
 
 import com.lihuahua.hyperspace.models.dto.RegisterDTO;
 import com.lihuahua.hyperspace.models.vo.ResVO;
-import com.lihuahua.hyperspace.server.UserServer;
+import com.lihuahua.hyperspace.Service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RegisterController {
 
     @Autowired
-    private UserServer userServer;
+    private UserService userServer;
 
 /**
  * 处理用户注册请求的接口方法

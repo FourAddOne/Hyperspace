@@ -30,12 +30,21 @@ public class SecurityConfig {
             .requestMatchers("/swagger-ui/**").permitAll()
             .requestMatchers("/user/login").permitAll()
             .requestMatchers("/user/register").permitAll()
+            .requestMatchers("/").permitAll()
+            .requestMatchers("/login").permitAll()
+            .requestMatchers("/register").permitAll()
+            .requestMatchers("/static/**").permitAll()
+            .requestMatchers("/*.html").permitAll()
+            .requestMatchers("/favicon.ico").permitAll()
+            .requestMatchers("/ws/**").permitAll() // 放行WebSocket端点
+            .requestMatchers("/sockjs/**").permitAll() // 放行SockJS端点
+            .requestMatchers("/friend/**").permitAll() // 放行好友相关API
 
             // 其他配置...
             .anyRequest().authenticated()
         )
             .csrf(csrf -> csrf
-                    .ignoringRequestMatchers("/api/**", "/user/login", "/user/register")
+                    .ignoringRequestMatchers("/api/**", "/user/login", "/user/register", "/", "/login", "/register", "/static/**", "/favicon.ico", "/index.html", "/ws/**", "/sockjs/**", "/friend/**")
             )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

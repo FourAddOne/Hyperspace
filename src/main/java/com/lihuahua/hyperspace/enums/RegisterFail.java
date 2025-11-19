@@ -2,16 +2,22 @@ package com.lihuahua.hyperspace.enums;
 
 public enum RegisterFail {
 
-    EMAIL_EXIST("邮箱已存在"),
-    USERNAME_EXIST("用户名已存在");
+    EMAIL_EXIST("REG_001", "邮箱已存在"),
+    USERNAME_EXIST("REG_002", "用户名已存在");
 
-    private final String msg;
+    private final String code;
+    private final String message;
 
-    RegisterFail(String msg) {
-        this.msg = msg;
+    RegisterFail(String code, String message) {
+        this.code = code;
+        this.message = message;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     public String getMessage() {
-        return msg;
+        return message;
     }
 }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lihuahua.hyperspace.mapper.FriendMapper">
+	<select id="selectByUserOne" resultType="com.lihuahua.hyperspace.models.po.FriendPO">
+		SELECT
+		user_one, user_sec, status, block_status,
+		user_one_remark, user_sec_remark, created_at, updated_at
+		FROM friend
+		WHERE user_one = #{userId}
+		<!-- 按需添加状态过滤，如只查已接受且未屏蔽的好友 -->
+		AND status = 'ACCEPTED'
+		AND block_status NOT IN ('USER_ONE_BLOCKED', 'USER_SEC_BLOCKED', 'BOTH_BLOCKED')
+	</select>
+	<select id="selectByUserSec" resultType="com.lihuahua.hyperspace.models.po.FriendPO">
+		SELECT
+			user_one, user_sec, status, block_status,
+			user_one_remark, user_sec_remark, created_at, updated_at
+		FROM friend
+		WHERE user_sec = #{userId}
+		  AND status = 'ACCEPTED'
+		  AND block_status NOT IN ('USER_ONE_BLOCKED', 'USER_SEC_BLOCKED', 'BOTH_BLOCKED')
+	</select>
+</mapper>

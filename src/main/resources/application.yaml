@@ -5,13 +5,25 @@ spring:
   datasource:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://127.0.0.1:5432/Hyperspace
+
     username: postgres
     password: yu3506058341
 
   redis:
-    host: 47.121.188.252
+    host: localhost
     port: 6379
     password: miniblogredis
+    database: 2
+    
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+  rabbitmq:
+    host: 1.15.41.43
+    port: 5672
+    username: rabbitmq
+    password: yZBERFfYwp3tDJba
 
 server:
   port: 8080
@@ -30,3 +42,9 @@ jwt:
   secret: GENERATE_SECURE_KEY
   expiration: 3600
   long-expiration: 604800
+
+logging:
+  level:
+    com.lihuahua.hyperspace.websocket: DEBUG
+    com.lihuahua.hyperspace.websocket.WebSocketInterceptor: DEBUG
+    com.lihuahua.hyperspace.websocket.ChatWebSocketHandler: DEBUG

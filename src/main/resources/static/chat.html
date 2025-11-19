@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天 - 超时空专列</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            color: #333;
+            font-size: 1.5rem;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .container {
+            flex: 1;
+            display: flex;
+            padding: 2rem;
+            gap: 0;
+            max-width: 100%;
+            width: 100%;
+            margin: 0 auto;
+            height: calc(100vh - 120px);
+        }
+        
+        .sidebar {
+            width: 250px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px 0 0 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .friends-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .friend-item {
+            padding: 0.75rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .friend-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .friend-item.active {
+            background-color: #667eea;
+            color: white;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .friend-info {
+            flex: 1;
+        }
+        
+        .friend-name {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .friend-status {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+        
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 0 10px 10px 0;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .chat-header .avatar {
+            width: 40px;
+            height: 40px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .message {
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            position: relative;
+        }
+        
+        .message.received {
+            align-self: flex-start;
+            background-color: #f1f1f1;
+            border-bottom-left-radius: 0;
+        }
+        
+        .message.sent {
+            align-self: flex-end;
+            background-color: #667eea;
+            color: white;
+            border-bottom-right-radius: 0;
+        }
+        
+        .message.system {
+            align-self: center;
+            background-color: #e9ecef;
+            color: #495057;
+            font-size: 0.8rem;
+            max-width: 80%;
+        }
+        
+        .message-info {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+        }
+        
+        .chat-input {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+        }
+        
+        .status {
+            padding: 1rem;
+            text-align: center;
+            background-color: #fff3cd;
+            color: #856404;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .websocket-info {
+            background: #e9ecef;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        
+        .target-input {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .target-input input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            outline: none;
+        }
+        
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .empty-list {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>超时空专列 - 聊天</h1>
+        <div class="user-info">
+            <span id="currentUser">未登录</span>
+            <button id="logoutBtn" class="btn">退出登录</button>
+        </div>
+    </div>
+    
+    <div class="nav">
+        <a href="chat.html" class="active">聊天</a>
+        <a href="friends.html">好友</a>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="friends-list" id="friendsList">
+                <div class="empty-list">加载中...</div>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div class="chat-header" id="chatHeader">
+                <div class="avatar" id="chatAvatar">U</div>
+                <div>
+                    <div class="friend-name" id="chatUserName">未选择用户</div>
+                    <div class="friend-status" id="chatUserStatus">离线</div>
+                </div>
+            </div>
+            
+            <!-- 隐藏目标用户输入框 -->
+            <input type="hidden" id="targetUserId" />
+            
+            <div id="chatMessages" class="chat-messages">
+                <div class="status">请输入目标用户ID并连接WebSocket以接收实时消息</div>
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="输入消息..." />
+                <button id="sendBtn" class="btn">发送</button>
+            </div>
+            
+            <div class="websocket-info" style="display: none;">
+                <h3>WebSocket状态</h3>
+                <div id="connectionStatus" class="status disconnected">未连接</div>
+                <button id="connectBtn" class="btn" style="width: 100%; margin-top: 10px;">连接WebSocket</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let accessToken = localStorage.getItem('accessToken');
+        let currentUser = null;
+        let websocket = null;
+        let friendsList = [];
+        let currentChatUser = null;
+        
+        // 页面加载时检查登录状态
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!accessToken) {
+                alert('请先登录！');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // 获取当前用户信息
+            fetchUserInfo();
+            
+            // 加载好友列表
+            loadFriendsList();
+            
+            // 绑定事件
+            document.getElementById('sendBtn').addEventListener('click', sendMessage);
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+            document.getElementById('connectBtn').addEventListener('click', connectWebSocket);
+            
+            // 延迟初始化WebSocket连接，确保用户信息已加载
+            // setTimeout(connectWebSocket, 100);
+        });
+        
+        // 获取当前用户信息
+        function fetchUserInfo() {
+            // 从JWT token中解析用户信息
+            const userId = parseUserIdFromToken(accessToken);
+            if (userId) {
+                currentUser = { userId: userId };
+                document.getElementById('currentUser').textContent = '用户: ' + userId;
+                console.log('用户已登录，用户ID:', userId);
+                
+                // 初始化WebSocket连接
+                connectWebSocket();
+            }
+        }
+        
+        // 从JWT token中解析用户ID
+        function parseUserIdFromToken(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                
+                const payload = JSON.parse(jsonPayload);
+                return payload.sub; // JWT中subject字段通常是用户ID
+            } catch (e) {
+                console.error('解析token失败:', e);
+                return null;
+            }
+        }
+        
+        // 连接WebSocket
+        function connectWebSocket() {
+            if (!accessToken) {
+                alert('请先登录！');
+                return;
+            }
+            
+            // 关闭已存在的连接
+            if (websocket) {
+                websocket.close();
+            }
+            
+            try {
+                // 建立WebSocket连接，将token作为查询参数传递
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/${currentUser.userId}`;
+                console.log('尝试连接到:', wsUrl);
+                
+                websocket = new WebSocket(wsUrl);
+                
+                // 自动重连机制
+                websocket.reconnectAttempts = 0;
+                websocket.maxReconnectAttempts = 5;
+                
+                // 连接打开事件
+                websocket.onopen = function(event) {
+                    console.log('WebSocket连接已建立');
+                    document.getElementById('connectionStatus').textContent = '已连接';
+                    document.getElementById('connectionStatus').className = 'status connected';
+                    document.getElementById('connectBtn').textContent = '断开连接';
+                    document.getElementById('connectBtn').onclick = disconnectWebSocket;
+                    
+                    // 重置重连计数
+                    websocket.reconnectAttempts = 0;
+                };
+                
+                // 收到消息事件
+                websocket.onmessage = function(event) {
+                    console.log('收到消息:', event.data);
+                    try {
+                        // 尝试解析JSON格式的消息
+                        const messageData = JSON.parse(event.data);
+                        if (messageData.type === 'PRIVATE_MESSAGE') {
+                            // 这是聊天消息
+                            displayMessage(messageData.content, messageData.from, false);
+                            
+                            // 如果当前没有和发送者聊天，添加到好友列表顶部
+                            if (currentChatUser !== messageData.from) {
+                                addFriendToTop(messageData.from);
+                            }
+                        } else {
+                            // 这是系统消息或其他类型的消息
+                            displayMessage(event.data, '系统', false);
+                        }
+                    } catch (e) {
+                        // 如果不是JSON格式，直接显示文本
+                        displayMessage(event.data, '系统', false);
+                    }
+                };
+                
+                // 连接关闭事件
+                websocket.onclose = function(event) {
+                    console.log('WebSocket连接已关闭', event);
+                    document.getElementById('connectionStatus').textContent = '连接已关闭';
+                    document.getElementById('connectionStatus').className = 'status disconnected';
+                    document.getElementById('connectBtn').textContent = '连接WebSocket';
+                    document.getElementById('connectBtn').onclick = connectWebSocket;
+                    
+                    // 自动重连机制
+                    if (websocket.reconnectAttempts < websocket.maxReconnectAttempts) {
+                        setTimeout(() => {
+                            websocket.reconnectAttempts++;
+                            connectWebSocket();
+                        }, 2000 * websocket.reconnectAttempts);
+                    }
+                };
+                
+                // 连接错误事件
+                websocket.onerror = function(event) {
+                    console.error('WebSocket连接发生错误:', event);
+                    document.getElementById('connectionStatus').textContent = '连接错误';
+                    document.getElementById('connectionStatus').className = 'status disconnected';
+                    
+                    // 自动重连机制
+                    if (websocket.reconnectAttempts < websocket.maxReconnectAttempts) {
+                        setTimeout(() => {
+                            websocket.reconnectAttempts++;
+                            connectWebSocket();
+                        }, 2000 * websocket.reconnectAttempts);
+                    }
+                };
+            } catch (error) {
+                console.error('创建WebSocket连接时出错:', error);
+            }
+        }
+        
+        // 断开WebSocket连接
+        function disconnectWebSocket() {
+            if (websocket) {
+                websocket.close();
+            }
+        }
+        
+        // 发送消息
+        function sendMessage() {
+            const targetUserIdInput = document.getElementById('targetUserId');
+            const targetUserId = targetUserIdInput.value.trim();
+            
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!targetUserId) {
+                alert('请先选择聊天对象！');
+                return;
+            }
+            
+            if (!message) {
+                alert('请输入消息内容！');
+                return;
+            }
+            
+            // 通过WebSocket发送消息
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                const messageData = {
+                    type: 'PRIVATE_MESSAGE',
+                    to: targetUserId,
+                    content: message
+                };
+                
+                websocket.send(JSON.stringify(messageData));
+                displayMessage(message, currentUser.userId, true);
+                messageInput.value = '';
+            } else {
+                alert('WebSocket连接未建立，请检查网络连接！');
+            }
+        }
+        
+        // 显示消息
+        function displayMessage(content, sender, isSent) {
+            const chatMessages = document.getElementById('chatMessages');
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            
+            const messageContent = document.createElement('div');
+            messageContent.textContent = content;
+            
+            const messageInfo = document.createElement('div');
+            messageInfo.className = 'message-info';
+            messageInfo.textContent = `${sender} - ${new Date().toLocaleTimeString()}`;
+            
+            messageDiv.appendChild(messageContent);
+            messageDiv.appendChild(messageInfo);
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // 加载好友列表
+        function loadFriendsList() {
+            fetch('/friend/get?userId=' + currentUser.userId, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + accessToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    friendsList = data.data;
+                    displayFriendsList(friendsList);
+                } else {
+                    console.error('获取好友列表失败:', data.msg);
+                }
+            })
+            .catch(error => {
+                console.error('获取好友列表错误:', error);
+            });
+        }
+        
+        // 显示好友列表
+        function displayFriendsList(friends) {
+            const friendsListElement = document.getElementById('friendsList');
+            
+            if (!friends || friends.length === 0) {
+                friendsListElement.innerHTML = '<div class="empty-list">暂无好友</div>';
+                return;
+            }
+            
+            friendsListElement.innerHTML = '';
+            
+            friends.forEach(friend => {
+                const friendId = friend.userOne === currentUser.userId ? friend.userSec : friend.userOne;
+                const remark = friend.userOne === currentUser.userId ? friend.userOneRemark : friend.userSecRemark;
+                
+                const friendItem = document.createElement('div');
+                friendItem.className = 'friend-item';
+                friendItem.setAttribute('data-userid', friendId);
+                friendItem.innerHTML = `
+                    <div class="avatar">${remark ? remark.charAt(0).toUpperCase() : friendId.charAt(0).toUpperCase()}</div>
+                    <div class="friend-info">
+                        <div class="friend-name">${remark || '未设置备注'}</div>
+                        <div class="friend-status">${friendId}</div>
+                    </div>
+                `;
+                
+                friendItem.addEventListener('click', () => selectChatUser(friendId, remark || '未设置备注'));
+                
+                friendsListElement.appendChild(friendItem);
+            });
+        }
+        
+        // 选择聊天用户
+        function selectChatUser(userId, userName) {
+            // 更新当前聊天用户
+            currentChatUser = userId;
+            
+            // 更新UI
+            document.getElementById('targetUserId').value = userId;
+            document.getElementById('chatUserName').textContent = userName;
+            document.getElementById('chatUserStatus').textContent = '在线';
+            document.getElementById('chatAvatar').textContent = userName ? userName.charAt(0).toUpperCase() : userId.charAt(0).toUpperCase();
+            
+            // 更新好友列表中的选中状态
+            document.querySelectorAll('.friend-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('data-userid') === userId) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 清空消息区域
+            document.getElementById('chatMessages').innerHTML = '<div class="message system">开始与 ' + userName + ' 聊天</div>';
+        }
+        
+        // 将新消息发送者添加到好友列表顶部
+        function addFriendToTop(userId) {
+            // 检查用户是否已经在好友列表中
+            const existingItem = document.querySelector(`.friend-item[data-userid="${userId}"]`);
+            if (existingItem) {
+                // 如果存在，将其移动到顶部
+                const friendsListElement = document.getElementById('friendsList');
+                friendsListElement.insertBefore(existingItem, friendsListElement.firstChild);
+                return;
+            }
+            
+            // 如果不存在，创建新项并添加到顶部
+            const friendItem = document.createElement('div');
+            friendItem.className = 'friend-item';
+            friendItem.setAttribute('data-userid', userId);
+            friendItem.innerHTML = `
+                <div class="avatar">${userId.charAt(0).toUpperCase()}</div>
+                <div class="friend-info">
+                    <div class="friend-name">${userId}</div>
+                    <div class="friend-status">新消息</div>
+                </div>
+            `;
+            
+            friendItem.addEventListener('click', () => selectChatUser(userId, userId));
+            
+            const friendsListElement = document.getElementById('friendsList');
+            // 如果第一个元素是"暂无好友"提示，则替换它
+            if (friendsListElement.firstChild && friendsListElement.firstChild.classList.contains('empty-list')) {
+                friendsListElement.innerHTML = '';
+            }
+            friendsListElement.insertBefore(friendItem, friendsListElement.firstChild);
+        }
+        
+        // 退出登录
+        function logout() {
+            // 断开WebSocket连接
+            if (websocket) {
+                websocket.close();
+            }
+            
+            // 清除本地存储的令牌
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            
+            // 跳转到登录页面
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>

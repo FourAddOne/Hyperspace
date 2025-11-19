@@ -2,10 +2,8 @@ package com.lihuahua.hyperspace;
 
 import com.lihuahua.hyperspace.models.dto.LoginDTO;
 import com.lihuahua.hyperspace.models.dto.RegisterDTO;
-import com.lihuahua.hyperspace.server.UserServer;
-import com.lihuahua.hyperspace.utils.IdUtil;
+import com.lihuahua.hyperspace.Service.UserService;
 import com.lihuahua.hyperspace.utils.OssUtil;
-import com.lihuahua.hyperspace.utils.PasswordUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,7 +15,7 @@ class HyperspaceApplicationTests {
     private OssUtil ossUtil;
 
     @Autowired
-    private UserServer userServer;
+    private UserService userServer;
 
     @Test
     void contextLoads() {

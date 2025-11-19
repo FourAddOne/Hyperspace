@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超时空专列 - 主页</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            color: white;
+        }
+        
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .feature-card h3 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .cta-section {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 3rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .cta-section h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            margin: 0.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            color: rgba(255, 255, 255, 0.8);
+            padding: 1rem;
+        }
+        
+        .user-nav {
+            text-align: right;
+            margin-bottom: 1rem;
+        }
+        
+        .user-nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .user-nav a:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <a href="login.html">登录</a>
+            <a href="register.html">注册</a>
+        </div>
+        
+        <header>
+            <h1>超时空专列</h1>
+            <p>连接未来，超越时空的极致体验</p>
+        </header>
+        
+        <div class="features">
+            <div class="feature-card">
+                <h3>即时通讯</h3>
+                <p>支持一对一聊天、群聊，实时消息推送，让沟通无延迟。</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>好友管理</h3>
+                <p>添加好友、设置备注、屏蔽用户，轻松管理您的社交圈。</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>安全认证</h3>
+                <p>采用JWT Token认证机制，保障用户信息安全，提供可靠的登录体验。</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>高速缓存</h3>
+                <p>集成Redis缓存系统，提供毫秒级数据访问速度，提升用户体验。</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>云端存储</h3>
+                <p>基于阿里云OSS的对象存储服务，确保文件安全可靠，随时访问。</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>消息存储</h3>
+                <p>使用RabbitMQ消息队列确保消息可靠投递，离线消息存储与拉取。</p>
+            </div>
+        </div>
+        
+        <div class="cta-section">
+            <h2>开始您的超时空之旅</h2>
+            <p>加入我们，体验前所未有的数字服务</p>
+            <a href="login.html" class="btn">用户登录</a>
+            <a href="register.html" class="btn btn-secondary">用户注册</a>
+        </div>
+        
+        <footer>
+            <p>&copy; 2025 超时空专列. 保留所有权利.</p>
+        </footer>
+    </div>
+</body>
+</html>
