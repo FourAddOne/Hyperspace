@@ -5,10 +5,10 @@
         <div class="chat-sidebar-header">
           <h2>聊天</h2>
         </div>
-        
+
         <div class="conversations-list">
-          <div 
-            v-for="conversation in conversations" 
+          <div
+            v-for="conversation in conversations"
             :key="conversation.id"
             class="conversation-item"
             :class="{ active: activeConversation?.id === conversation.id }"
@@ -28,7 +28,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="chat-main">
         <div class="chat-header" v-if="activeConversation">
           <div class="chat-header-info">
@@ -42,29 +42,29 @@
             <el-button icon="el-icon-more" circle></el-button>
           </div>
         </div>
-        
+
         <!-- 背景容器 -->
         <div class="chat-background-container" v-if="activeConversation">
           <!-- 背景图片层 -->
-          <div 
-            class="message-background" 
+          <div
+            class="message-background"
             v-if="backgroundSettings.backgroundImage"
             :style="backgroundStyle"
           ></div>
           <!-- 覆盖层用于控制透明度 -->
-          <div 
-            class="message-overlay" 
+          <div
+            class="message-overlay"
             v-if="backgroundSettings.backgroundImage"
             :style="overlayStyle"
           ></div>
-          
+
             <div class="chat-messages-container" ref="messagesContainer">
             <div class="chat-messages">
               <template v-for="message in messages" :key="message.id">
                 <div v-if="message.showDate" class="message-date-divider">
                   {{ formatDate(message.createdAt) }}
                 </div>
-                <div 
+                <div
                   class="message"
                   :class="{ 'sent': message.isSent, 'received': !message.isSent }"
                 >
@@ -81,7 +81,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="chat-input-area" v-if="activeConversation">
           <div class="chat-input-tools">
             <el-button icon="el-icon-picture" circle size="small"></el-button>
@@ -96,8 +96,8 @@
             class="message-input"
           ></el-input>
           <div class="chat-input-actions">
-            <el-button 
-              type="primary" 
+            <el-button
+              type="primary"
               @click="sendMessage"
               :disabled="!newMessage.trim()"
               size="small"
@@ -106,7 +106,7 @@
             </el-button>
           </div>
         </div>
-        
+
         <div class="chat-placeholder" v-else>
           <div class="placeholder-content">
             <i class="el-icon-chat-dot-round placeholder-icon"></i>
@@ -177,19 +177,19 @@ const backgroundStyle = computed(() => {
 const formatDate = (date: string) => {
   const messageDate = new Date(date);
   const today = new Date();
-  
+
   // 检查是否是今天
   if (messageDate.toDateString() === today.toDateString()) {
     return '今天';
   }
-  
+
   // 检查是否是昨天
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   if (messageDate.toDateString() === yesterday.toDateString()) {
     return '昨天';
   }
-  
+
   // 其他日期格式化为年月日
   return `${messageDate.getFullYear()}年${messageDate.getMonth() + 1}月${messageDate.getDate()}日`;
 }
@@ -227,13 +227,13 @@ const overlayStyle = computed(() => {
 const updateBackgroundSettings = () => {
   const savedBackgroundImage = localStorage.getItem('userBackgroundImage')
   const savedBackgroundOpacity = localStorage.getItem('userBackgroundOpacity')
-  
+
   if (savedBackgroundImage) {
     backgroundSettings.value.backgroundImage = savedBackgroundImage
   } else {
     backgroundSettings.value.backgroundImage = ''
   }
-  
+
   if (savedBackgroundOpacity) {
     backgroundSettings.value.backgroundOpacity = parseInt(savedBackgroundOpacity, 10)
   } else {
@@ -257,16 +257,16 @@ const handleStorageChanged = (e: StorageEvent) => {
 // 处理用户状态变更
 const handleUserStatusChange = (data: any) => {
   console.log('开始处理用户状态变更:', data);
-  
+
   // 检查data是否有效
   if (!data || !data.userId) {
     console.log('无效的用户状态数据');
     return;
   }
-  
+
   console.log('变更前的conversations:', JSON.parse(JSON.stringify(conversations.value)));
   console.log('变更前的activeConversation:', JSON.parse(JSON.stringify(activeConversation.value)));
-  
+
   // 直接修改数组元素以确保响应式更新
   for (let i = 0; i < conversations.value.length; i++) {
     if (conversations.value[i].id === data.userId) {
@@ -277,37 +277,37 @@ const handleUserStatusChange = (data: any) => {
       break;
     }
   }
-  
+
   console.log('会话列表已更新');
-  
+
   // 如果当前活跃会话是该用户，也更新活跃会话的状态
   if (activeConversation.value && activeConversation.value.id === data.userId) {
     console.log(`更新当前会话用户 ${data.userId} 状态`);
     activeConversation.value.status = data.status ? '在线' : '离线';
     console.log('当前会话已更新');
   }
-  
+
   // 触发全局事件以通知其他组件
   const event = new CustomEvent('userStatusChange', { detail: data });
   window.dispatchEvent(event);
-  
+
   console.log('用户状态变更处理完成');
 };
 
 // 处理实时消息
 const handleRealTimeMessage = (message: any) => {
   console.log('收到实时消息:', message);
-  
+
   // 检查消息是否已存在（避免重复显示）
   const exists = messages.value.some(msg => msg.id === message.id);
   if (exists) {
     console.log('消息已存在，跳过:', message.id);
     return;
   }
-  
+
   // 确定对话伙伴ID（不是当前用户ID的另一个用户）
   const partnerId = message.senderId === getUserInfo()?.userId ? message.receiverId : message.senderId;
-  
+
   // 处理当前活跃会话的消息
   if (activeConversation.value && activeConversation.value.id === partnerId) {
     // 添加消息到列表
@@ -319,7 +319,7 @@ const handleRealTimeMessage = (message: any) => {
       showDate: message.showDate || false, // 如果后端提供了showDate属性则使用，否则默认为false
       createdAt: message.createdAt || new Date().toISOString()
     };
-    
+
     // 检查是否需要显示日期（如果这是当天第一条消息）
     if (messages.value.length === 0) {
       newMsg.showDate = true;
@@ -329,25 +329,25 @@ const handleRealTimeMessage = (message: any) => {
       if (lastMessage.createdAt) {
         const lastMessageDate = new Date(lastMessage.createdAt);
         const newMessageDate = new Date(newMsg.createdAt);
-        
+
         // 如果日期不同，则显示日期
         if (lastMessageDate.toDateString() !== newMessageDate.toDateString()) {
           newMsg.showDate = true;
         }
       }
     }
-    
+
     messages.value.push(newMsg);
-    
+
     // 滚动到底部
     scrollToBottom();
-    
+
     // 如果消息来自其他用户，标记为已读
     if (message.senderId !== getUserInfo()?.userId) {
       markMessagesAsRead(message.senderId);
     }
   }
-  
+
   // 更新会话列表中的最后消息（无论是否是当前会话）
   const updatedConversations = conversations.value.map(conversation => {
     if (conversation.id === partnerId) {
@@ -359,9 +359,9 @@ const handleRealTimeMessage = (message: any) => {
     }
     return conversation;
   });
-  
+
   conversations.value = updatedConversations;
-  
+
   // 如果不是当前会话的消息，增加未读计数
   if (!activeConversation.value || activeConversation.value.id !== partnerId) {
     const currentCount = unreadCounts.value.get(partnerId) || 0;
@@ -376,12 +376,12 @@ const selectConversation = async (conversation: any) => {
   unreadCounts.value.delete(conversation.id);
   // 加载消息
   await loadMessages(conversation.id)
-  
+
   // 标记消息为已读
   if (conversation.id) {
     markMessagesAsRead(conversation.id);
   }
-  
+
   // 确保在DOM更新后滚动到底部
   setTimeout(() => {
     scrollToBottom()
@@ -394,7 +394,7 @@ const loadMessages = async (conversationId: string) => {
     const response = await apiClient.get('/api/messages/history', {
       params: { friendId: conversationId }
     })
-    
+
     // 确保响应数据存在且为数组
     if (response && Array.isArray(response.data)) {
       messages.value = response.data.map((msg: any) => ({
@@ -409,7 +409,7 @@ const loadMessages = async (conversationId: string) => {
       // 如果没有消息或响应格式不正确，初始化为空数组
       messages.value = []
     }
-    
+
     // 滚动到底部
     setTimeout(() => {
       scrollToBottom()
@@ -420,7 +420,7 @@ const loadMessages = async (conversationId: string) => {
       ElMessage.error('登录已过期，请重新登录')
       return
     }
-    
+
     ElMessage.error('加载消息失败: ' + (error.message || '未知错误'))
     // 清空消息列表而不是显示固定消息
     messages.value = []
@@ -432,7 +432,7 @@ const sendMessage = async () => {
   if (!newMessage.value.trim() || !activeConversation.value) {
     return
   }
-  
+
   try {
     // 构造本地消息对象（用于立即显示）
     const localMessage = {
@@ -443,22 +443,22 @@ const sendMessage = async () => {
       showDate: false,
       createdAt: new Date().toISOString()
     };
-    
+
     // 立即添加到消息列表（优化用户体验）
     messages.value.push(localMessage);
-    
+
     // 滚动到底部
     scrollToBottom();
-    
+
     // 通过WebSocket发送消息
     if (globalWebSocketManager.isConnected()) {
       const messageDTO = {
         receiverId: activeConversation.value.id,
         content: newMessage.value
       };
-      
+
       globalWebSocketManager.sendMessage(messageDTO);
-      
+
       // Clear input field
       newMessage.value = ''
     } else {
@@ -475,7 +475,7 @@ const sendMessage = async () => {
       ElMessage.error('登录已过期，请重新登录')
       return
     }
-    
+
     ElMessage.error('发送消息失败: ' + (error.message || '未知错误'))
   }
 }
@@ -506,10 +506,10 @@ watch(() => route.path, (newPath) => {
           time: '',
           status: friend.loginStatus ? '在线' : '离线'
         };
-        
+
         // 选择这个会话
         selectConversation(tempConversation);
-        
+
         // 清除localStorage中的临时数据
         localStorage.removeItem('selectedFriendForChat');
       } catch (e) {
@@ -532,16 +532,16 @@ const loadConversations = async () => {
       time: '',
       status: friend.loginStatus ? '在线' : '离线'
     }))
-    
+
     console.log('初始化的conversations:', JSON.parse(JSON.stringify(conversations.value)));
-    
+
     // 获取未读消息数量
     if (conversations.value.length > 0) {
       const friendIds = conversations.value.map((conv: any) => conv.id);
       const unreadResponse = await apiClient.get('/api/messages/unread-counts', {
         params: { friendIds }
       });
-      
+
       if (unreadResponse && unreadResponse.data) {
         // 更新未读消息计数
         Object.entries(unreadResponse.data).forEach(([friendId, count]) => {
@@ -576,7 +576,7 @@ const refreshUnreadCounts = async () => {
       const unreadResponse = await apiClient.get('/api/messages/unread-counts', {
         params: { friendIds }
       });
-      
+
       if (unreadResponse && unreadResponse.data) {
         // 只更新未读计数大于0的会话，不清空其他已读会话的计数
         Object.entries(unreadResponse.data).forEach(([friendId, count]) => {
@@ -599,16 +599,16 @@ onMounted(() => {
   // 设置WebSocket回调
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
   globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
-  
+
   // 增加WebSocket连接引用计数
   globalWebSocketManager.incrementConnection();
-  
+
   // 加载会话列表
   loadConversations()
-  
+
   // 监听全局用户状态变更事件
   window.addEventListener('userStatusChange', handleGlobalUserStatusChange);
-  
+
   // 检查并应用暗色模式
   const savedDarkMode = localStorage.getItem('userDarkMode')
   if (savedDarkMode === 'true') {
@@ -618,16 +618,16 @@ onMounted(() => {
     document.body.style.backgroundImage = 'none';
     document.body.classList.remove('login-page');
   }
-  
+
   // 初始化背景设置
   updateBackgroundSettings()
-  
+
   // 监听自定义背景透明度变化事件
   window.addEventListener('backgroundOpacityChanged', handleBackgroundOpacityChanged as EventListener);
-  
+
   // 监听localStorage变化
   window.addEventListener('storage', handleStorageChanged);
-  
+
   // 检查是否有从好友列表传递过来的选中好友
   const selectedFriend = localStorage.getItem('selectedFriendForChat');
   if (selectedFriend) {
@@ -642,17 +642,17 @@ onMounted(() => {
         time: '',
         status: friend.loginStatus ? '在线' : '离线'
       };
-      
+
       // 选择这个会话
       selectConversation(tempConversation);
-      
+
       // 清除localStorage中的临时数据
       localStorage.removeItem('selectedFriendForChat');
     } catch (e) {
       console.error('解析选中好友信息失败:', e);
     }
   }
-  
+
   // 设置定时刷新未读消息数量
   unreadRefreshInterval.value = window.setInterval(() => {
     refreshUnreadCounts();
@@ -663,14 +663,14 @@ onMounted(() => {
 onUnmounted(() => {
   // 减少WebSocket连接引用计数
   globalWebSocketManager.decrementConnection();
-  
+
   // 移除全局用户状态变更事件监听器
   window.removeEventListener('userStatusChange', handleGlobalUserStatusChange);
-  
+
   // 清理事件监听器
   window.removeEventListener('backgroundOpacityChanged', handleBackgroundOpacityChanged as EventListener);
   window.removeEventListener('storage', handleStorageChanged);
-  
+
   // 清理定时器
   if (unreadRefreshInterval.value) {
     clearInterval(unreadRefreshInterval.value);

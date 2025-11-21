@@ -13,4 +13,9 @@ public class MessageDTO {
     private Date createdAt;
     private String senderName;
     private boolean showDate; // 是否显示日期
+
+    //todo  在MessageConstant
+    private Integer to_target_type;
+    private Integer to_target_id;
+
 }

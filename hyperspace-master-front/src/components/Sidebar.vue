@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatRound, User, Setting, SwitchButton } from '@element-plus/icons-vue'
+import {ChatRound, User, Setting, SwitchButton, ChatLineSquare,SwitchFilled} from '@element-plus/icons-vue'
 import { getUserInfo, getFullAvatarUrl } from '../utils/user'
 import { removeToken } from '../utils/auth'
 import apiClient, { API_ENDPOINTS } from '../services/api'
@@ -140,6 +140,22 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
           <user class="nav-icon" />
           <span>好友</span>
         </li>
+        <li
+            :class="{ active: $route.name === 'groups' }"
+            @click="$router.push('/groups')"
+        >
+          <ChatLineSquare class="nav-icon" />
+          <span>群聊</span>
+        </li>
+
+        <li
+            :class="{ active: $route.name === 'games' }"
+            @click="$router.push('/games')"
+        >
+          <SwitchFilled  class="nav-icon"/>
+          <span>游戏</span>
+        </li>
+
         <li 
           :class="{ active: $route.name === 'profile' }" 
           @click="$router.push('/profile')"

@@ -47,3 +47,4 @@ file:
   upload:
     path: uploads
     mode: local
+
