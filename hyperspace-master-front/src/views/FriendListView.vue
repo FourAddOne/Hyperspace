@@ -11,13 +11,7 @@
           placeholder="搜索好友"
           class="search-input"
           @keyup.enter="searchFriends"
-        >
-          <template #append>
-            <el-button @click="searchFriends">
-              <i class="el-icon-search"></i>
-            </el-button>
-          </template>
-        </el-input>
+        />
       </div>
     </div>
     
@@ -65,7 +59,7 @@
         <div class="friend-info">
           <div class="username">{{ friend.userName }}</div>
           <div class="friend-signature" v-if="friend.personalSignature">
-            {{ friend.personalSignature }}
+            {{ friend.personalSignature.length > 30 ? friend.personalSignature.substring(0, 30) + '...' : friend.personalSignature }}
           </div>
           <div class="friend-signature empty" v-else>
             暂无签名
@@ -74,6 +68,10 @@
         </div>
         <div class="friend-status" :class="{ online: friend.loginStatus }">
           {{ friend.loginStatus ? '在线' : '离线' }}
+        </div>
+        <div class="friend-actions">
+          <el-button size="small" type="primary" @click.stop="editRemark(friend)" class="action-button">备注</el-button>
+          <el-button size="small" type="danger" @click.stop="deleteFriend(friend.userId)" class="action-button">删除</el-button>
         </div>
       </div>
       
@@ -86,12 +84,38 @@
       </div>
     </div>
   </div>
+  
+  <!-- 备注编辑对话框 -->
+  <div v-if="showRemarkDialog" class="dialog-overlay" @click="showRemarkDialog = false">
+    <div class="dialog-content" @click.stop>
+      <div class="dialog-header">
+        <h3>编辑备注</h3>
+        <button class="dialog-close" @click="showRemarkDialog = false">×</button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-group">
+          <label>为 "{{ currentFriend?.userName }}" 设置备注:</label>
+          <input 
+            v-model="remarkInput" 
+            type="text" 
+            class="form-input"
+            maxlength="20"
+            placeholder="请输入备注名（最多20个字符）"
+          />
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button class="cancel-button" @click="showRemarkDialog = false">取消</button>
+        <button class="save-button" @click="saveRemark">保存</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '../services/api'
 import { getFullAvatarUrl } from '../utils/user'
 
@@ -105,6 +129,11 @@ const allFriends = ref<any[]>([])
 
 // 计算属性：过滤后的好友列表
 const filteredFriends = ref<any[]>([])
+
+// 备注编辑相关
+const showRemarkDialog = ref(false)
+const currentFriend = ref<any>(null)
+const remarkInput = ref('')
 
 // 跳转到添加好友页面
 const goToAddFriend = () => {
@@ -139,33 +168,47 @@ const loadFriends = async () => {
 const handleUserStatusChange = (data: any) => {
   console.log('好友状态变更:', data);
   
-  // 更新好友列表中的用户状态
-  const updatedFriends = allFriends.value.map(friend => {
-    if (friend.userId === data.userId) {
-      return {
-        ...friend,
-        loginStatus: data.status
-      };
-    }
-    return friend;
-  });
+  // 检查data是否有效
+  if (!data || !data.userId) {
+    console.log('无效的用户状态数据');
+    return;
+  }
   
-  allFriends.value = updatedFriends;
-  filteredFriends.value = updatedFriends;
-  friends.value = updatedFriends;
+  let updated = false;
+  
+  // 更新好友列表中的用户状态
+  for (let i = 0; i < allFriends.value.length; i++) {
+    if (allFriends.value[i].userId === data.userId) {
+      // 直接修改数组元素的属性以确保响应式更新
+      allFriends.value[i].loginStatus = data.status;
+      console.log(`好友 ${data.userId} 状态已更新为: ${data.status ? '在线' : '离线'}`);
+      updated = true;
+      break;
+    }
+  }
+  
+  if (updated) {
+    // 强制触发Vue的响应式更新
+    allFriends.value = [...allFriends.value];
+    
+    // 更新过滤后的好友列表
+    filteredFriends.value = [...allFriends.value];
+    
+    // 更新好友列表
+    friends.value = [...allFriends.value];
+  }
   
   // 同时更新好友请求列表中的用户状态（如果存在）
-  const updatedPendingRequests = pendingRequests.value.map(request => {
-    if (request.userId === data.userId) {
-      return {
-        ...request,
-        loginStatus: data.status
-      };
+  for (let i = 0; i < pendingRequests.value.length; i++) {
+    if (pendingRequests.value[i].userId === data.userId) {
+      // 直接修改数组元素的属性以确保响应式更新
+      pendingRequests.value[i].loginStatus = data.status;
+      console.log(`请求中的好友 ${data.userId} 状态已更新为: ${data.status ? '在线' : '离线'}`);
+      
+      // 强制触发Vue的响应式更新
+      pendingRequests.value = [...pendingRequests.value];
     }
-    return request;
-  });
-  
-  pendingRequests.value = updatedPendingRequests;
+  }
 };
 
 // 加载好友请求
@@ -234,6 +277,55 @@ const startChatAndNavigate = (friend: any) => {
   router.push('/chat');
 }
 
+// 删除好友
+const deleteFriend = (friendId: string) => {
+  ElMessageBox.confirm('确定要删除这个好友吗？', '确认删除', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      await apiClient.delete('/api/friends/delete', {
+        params: { friendId }
+      });
+      ElMessage.success('好友已删除');
+      // 重新加载好友列表
+      await loadFriends();
+    } catch (error: any) {
+      ElMessage.error('删除好友失败: ' + error.message);
+    }
+  }).catch(() => {
+    // 取消删除
+  });
+};
+
+// 编辑备注
+const editRemark = (friend: any) => {
+  currentFriend.value = friend;
+  remarkInput.value = friend.userName; // 默认使用当前用户名作为备注
+  showRemarkDialog.value = true;
+};
+
+// 保存备注
+const saveRemark = async () => {
+  if (!currentFriend.value) return;
+  
+  try {
+    await apiClient.post('/api/friends/remark', null, {
+      params: { 
+        friendId: currentFriend.value.userId,
+        remark: remarkInput.value
+      }
+    });
+    ElMessage.success('备注已更新');
+    showRemarkDialog.value = false;
+    // 重新加载好友列表以显示更新后的备注
+    await loadFriends();
+  } catch (error: any) {
+    ElMessage.error('更新备注失败: ' + error.message);
+  }
+};
+
 // 组件挂载时加载数据
 onMounted(() => {
   loadFriends()
@@ -249,12 +341,22 @@ onUnmounted(() => {
   window.removeEventListener('userStatusChange', handleGlobalUserStatusChange);
 })
 
+// 添加activated钩子确保组件激活时WebSocket回调正确设置
+onActivated(() => {
+  // 确保WebSocket回调设置
+})
+
 // 处理全局用户状态变更事件
 const handleGlobalUserStatusChange = (event: Event) => {
+  console.log('FriendListView收到用户状态变更事件');
   const customEvent = event as CustomEvent;
   handleUserStatusChange(customEvent.detail);
 };
 
+// 监听搜索关键词变化
+watch(searchKeyword, () => {
+  searchFriends();
+});
 </script>
 
 <style scoped>
@@ -285,10 +387,49 @@ const handleGlobalUserStatusChange = (event: Event) => {
 
 .add-friend-button {
   white-space: nowrap;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.add-friend-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .search-input {
   width: 300px;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.search-input :deep(.el-input__inner) {
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 8px 15px;
+  transition: all 0.3s ease;
+}
+
+.search-input :deep(.el-input__inner:focus) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .friend-requests {
@@ -369,11 +510,28 @@ const handleGlobalUserStatusChange = (event: Event) => {
   border-radius: 10px;
   background-color: #f0f0f0;
   color: #333; /* 设置状态文字颜色 */
+  margin-right: 15px; /* 增加与操作按钮的间距 */
 }
 
 .friend-status.online {
   background-color: #e8f5e9;
   color: #4caf50;
+}
+
+.friend-actions {
+  display: flex;
+  gap: 8px; /* 按钮之间的间距 */
+}
+
+.action-button {
+  border-radius: 15px; /* 圆角按钮 */
+  font-size: 12px; /* 调整字体大小 */
+  padding: 4px 10px; /* 调整内边距 */
+  transition: all 0.3s ease; /* 添加过渡效果 */
+}
+
+.action-button:hover {
+  transform: scale(1.05); /* 悬停时轻微放大 */
 }
 
 .empty-state {
@@ -393,6 +551,35 @@ const handleGlobalUserStatusChange = (event: Event) => {
 .dark-mode .friends-list h3 {
   color: #f5f5f5;
 }
+
+.dark-mode .add-friend-button {
+  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .add-friend-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.dark-mode .search-input :deep(.el-input__inner) {
+  background-color: #2d3748;
+  border-color: #4a5568;
+  color: #f7fafc;
+}
+
+.dark-mode .search-input :deep(.el-input__inner:focus) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.dark-mode .search-input :deep(.el-input__wrapper) {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+}
+
+/* 已移除搜索按钮相关样式 */
 
 .dark-mode .friend-requests h3,
 .dark-mode .friends-list h3 {
@@ -431,5 +618,14 @@ const handleGlobalUserStatusChange = (event: Event) => {
 .dark-mode .friend-status.online {
   background-color: #335a33;
   color: #a5d6a7;
+}
+
+.dark-mode .action-button {
+  border: none;
+}
+
+.dark-mode .action-button:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
 }
 </style>

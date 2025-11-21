@@ -129,6 +129,9 @@ const handleLogin = async () => {
       
       ElMessage.success('登录成功')
       
+      // 添加延迟确保token被正确设置
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // 跳转到聊天页面
       await router.push('/chat')
     }

@@ -27,4 +27,7 @@ public interface FriendServer {
     
     // 检查是否为好友
     boolean isFriend(String userId, String friendId);
+    
+    // 更新好友备注
+    boolean updateFriendRemark(String userId, String friendId, String remark);
 }

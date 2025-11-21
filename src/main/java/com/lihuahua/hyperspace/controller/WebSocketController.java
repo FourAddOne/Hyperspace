@@ -156,6 +156,7 @@ public class WebSocketController {
     @EventListener
     public void handleWebSocketConnectListener(SessionConnectEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+        System.out.println("WebSocket连接事件触发，headerAccessor: " + headerAccessor);
         if (headerAccessor.getUser() != null) {
             String userId = headerAccessor.getUser().getName();
             System.out.println("用户 " + userId + " 连接到WebSocket");
@@ -172,6 +173,9 @@ public class WebSocketController {
             messagingTemplate.convertAndSend("/topic/user-status", message);
         } else {
             System.out.println("未认证的用户尝试连接WebSocket");
+            if (headerAccessor.getNativeHeader("Authorization") != null) {
+                System.out.println("Authorization header: " + headerAccessor.getNativeHeader("Authorization"));
+            }
         }
     }
 

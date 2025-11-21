@@ -76,42 +76,4 @@ public class loginController {
             return ResVO.success("注销成功");
         }
     }
-
-    @Operation(summary = "获取用户信息")
-    @GetMapping("/info")
-    public ResVO<UserLoginVO> getUserInfo(@RequestHeader("Authorization") String token) {
-        try {
-            String userId = JwtTokenUtil.validateToken(token.replace("Bearer ", ""));
-            if (userId != null) {
-                UserLoginVO userInfo = userServer.getUserInfo(userId);
-                return ResVO.success(userInfo);
-            }
-            return ResVO.fail("无效的token");
-        } catch (Exception e) {
-            return ResVO.fail(e.getMessage());
-        }
-    }
-
-    @Operation(summary = "更新头像")
-    @PostMapping("/avatar")
-    public ResVO<String> updateAvatar(@RequestHeader("Authorization") String token,
-                                       @RequestParam("avatarUrl") String avatarUrl) {
-        try {
-            System.out.println("开始更新头像，token: " + token + ", avatarUrl: " + avatarUrl);
-            String userId = JwtTokenUtil.validateToken(token.replace("Bearer ", ""));
-            System.out.println("解析出的用户ID: " + userId);
-            if (userId != null) {
-                Boolean result = userServer.updateAvatar(userId, avatarUrl);
-                System.out.println("更新头像结果: " + result);
-                if (result) {
-                    return ResVO.success("头像更新成功");
-                }
-            }
-            return ResVO.fail("头像更新失败");
-        } catch (Exception e) {
-            System.err.println("更新头像异常: " + e.getMessage());
-            e.printStackTrace();
-            return ResVO.fail(e.getMessage());
-        }
-    }
 }

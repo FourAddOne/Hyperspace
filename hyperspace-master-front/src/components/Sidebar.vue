@@ -185,6 +185,7 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
   border-radius: 50%;
   background-color: #ddd;
   margin-bottom: 8px;
+  object-fit: cover;
 }
 
 .user-info {

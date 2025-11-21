@@ -4,9 +4,9 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/hyperspace
-    username: root
-    password: 84519597
+    url: jdbc:mysql://1.15.41.43:3306/hyperspace
+    username: hyperspace
+    password: KFaRMeZJfrWpEA3i
 
   redis:
     host: localhost
@@ -31,7 +31,7 @@ aliyun:
     endpoint: oss-cn-hangzhou.aliyuncs.com
     accessKeyId: LTAI5tCvmabLdf2xQcN363tz
     accessKeySecret: o2Q5xjQ7hcizJv5w2OMLlrohP4LdWZ
-    bucketName: lihuahua-hyperspace
+    bucketName: fourandone-hyperspace
 
 knife4j:
   enable: true
@@ -45,4 +45,4 @@ jwt:
 file:
   upload:
     path: uploads
-    mode: local
+    mode: oss

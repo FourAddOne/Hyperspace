@@ -14,9 +14,24 @@ class WebSocketService {
     onUserStatusChange: (data: any) => void, 
     onMessageReceived?: (data: any) => void
   ) {
-    // 如果已经连接，先断开
+    // 如果已经连接并且回调函数没有变化，则不需要重新连接
+    if (this.connected && 
+        this.userStatusCallback === onUserStatusChange && 
+        this.messageCallback === onMessageReceived) {
+      console.log('WebSocket已经连接且回调函数未变化，无需重新连接');
+      return;
+    }
+    
+    // 如果已经连接但回调函数有变化，只需要更新回调函数和重新订阅
     if (this.connected) {
-      this.disconnect();
+      console.log('WebSocket已连接，更新回调函数');
+      this.userStatusCallback = onUserStatusChange;
+      if (onMessageReceived) {
+        this.messageCallback = onMessageReceived;
+      }
+      // 重新订阅以使用新的回调函数
+      this.resubscribe();
+      return;
     }
     
     this.userStatusCallback = onUserStatusChange;
@@ -36,8 +51,10 @@ class WebSocketService {
       connectHeaders: {
         Authorization: `Bearer ${token}`
       },
+      // 启用STOMP客户端调试模式
       debug: function (str) {
-        console.log('STOMP: ' + str);
+        // 启用调试日志
+        // console.log('[STOMP DEBUG]', str);
       },
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
@@ -46,80 +63,127 @@ class WebSocketService {
 
     // 连接成功回调
     this.client.onConnect = (frame) => {
-      console.log('WebSocket连接成功: ' + frame);
+      // console.log('WebSocket连接成功:', frame);
       this.connected = true;
 
       // 订阅用户状态变更消息
-      const userStatusSubscription = this.client?.subscribe('/topic/user-status', (message) => {
-        try {
-          const data = JSON.parse(message.body);
-          console.log('收到用户状态变更消息:', data);
-          if (this.userStatusCallback) {
-            console.log('调用用户状态回调函数');
-            this.userStatusCallback(data);
-            console.log('用户状态回调函数执行完成');
-          } else {
-            console.log('用户状态回调函数未设置');
-          }
-        } catch (error) {
-          console.error('解析用户状态消息失败:', error);
-        }
-      });
+      this.subscribeToUserStatus();
 
-      if (userStatusSubscription) {
-        this.subscriptions.set('/topic/user-status', userStatusSubscription);
-      }
-      
       // 如果提供了消息回调，订阅聊天消息
       if (this.messageCallback) {
-        const messageSubscription = this.client?.subscribe('/user/queue/messages', (message) => {
-          try {
-            const data = JSON.parse(message.body);
-            console.log('收到聊天消息:', data);
-            if (this.messageCallback) {
-              this.messageCallback(data);
-            }
-          } catch (error) {
-            console.error('解析聊天消息失败:', error);
-          }
-        });
-
-        if (messageSubscription) {
-          this.subscriptions.set('/user/queue/messages', messageSubscription);
-        }
+        this.subscribeToMessages();
       }
     };
 
     // 连接错误回调
     this.client.onStompError = (frame) => {
-      console.error('WebSocket连接错误: ', frame.headers['message']);
-      console.error('详细错误信息: ', frame.body);
+      // console.error('WebSocket连接错误: ', frame.headers['message']);
+      // console.error('详细错误信息: ', frame.body);
     };
     
     // WebSocket断开连接回调
     this.client.onDisconnect = () => {
-      console.log('WebSocket连接已断开');
+      // console.log('WebSocket断开连接');
       this.connected = false;
     };
 
+    // WebSocket连接失败回调
+    this.client.onWebSocketError = (event) => {
+      // console.error('WebSocket连接失败:', event);
+    };
+
     // 启动连接
+    // console.log('激活WebSocket客户端');
     this.client.activate();
+  }
+
+  // 更新用户状态回调函数
+  updateUserStatusCallback(callback: (data: any) => void) {
+    this.userStatusCallback = callback;
+  }
+
+  // 更新消息回调函数
+  updateMessageCallback(callback: (data: any) => void) {
+    this.messageCallback = callback;
+    // 如果已经连接，重新订阅消息以使用新的回调函数
+    if (this.connected) {
+      this.resubscribe();
+    }
+  }
+
+  // 重新订阅主题
+  private resubscribe() {
+    // console.log('重新订阅WebSocket主题');
+    // 取消现有订阅
+    this.subscriptions.forEach((subscription, destination) => {
+      subscription.unsubscribe();
+    });
+    this.subscriptions.clear();
+
+    // 重新订阅
+    this.subscribeToUserStatus();
+    if (this.messageCallback) {
+      this.subscribeToMessages();
+    }
+  }
+
+  // 订阅用户状态变更消息
+  private subscribeToUserStatus() {
+    if (!this.client) return;
+    
+    // console.log('订阅用户状态变更消息: /topic/user-status');
+    const userStatusSubscription = this.client.subscribe('/topic/user-status', (message) => {
+      try {
+        const data = JSON.parse(message.body);
+        // console.log('收到用户状态变更消息:', data);
+        if (this.userStatusCallback) {
+          this.userStatusCallback(data);
+        }
+      } catch (error) {
+        // console.error('解析用户状态消息失败:', error);
+      }
+    });
+
+    if (userStatusSubscription) {
+      this.subscriptions.set('/topic/user-status', userStatusSubscription);
+    }
+  }
+
+  // 订阅聊天消息
+  private subscribeToMessages() {
+    if (!this.client || !this.messageCallback) return;
+    
+    // console.log('订阅聊天消息: /user/queue/messages');
+    const messageSubscription = this.client.subscribe('/user/queue/messages', (message) => {
+      try {
+        const data = JSON.parse(message.body);
+        // console.log('收到聊天消息:', data);
+        if (this.messageCallback) {
+          this.messageCallback(data);
+        }
+      } catch (error) {
+        // console.error('解析聊天消息失败:', error);
+      }
+    });
+
+    if (messageSubscription) {
+      this.subscriptions.set('/user/queue/messages', messageSubscription);
+    }
   }
 
   // 断开连接
   disconnect() {
     if (this.client) {
+      // console.log('断开WebSocket连接');
       // 取消所有订阅
       this.subscriptions.forEach((subscription, destination) => {
         subscription.unsubscribe();
-        console.log('已取消订阅:', destination);
       });
       this.subscriptions.clear();
 
       // 断开连接
       this.client.deactivate();
       this.connected = false;
-      console.log('WebSocket连接已断开');
     }
   }
 
@@ -131,14 +195,13 @@ class WebSocketService {
         timestamp: Date.now()
       };
       
+      // console.log('发送用户状态消息:', message);
       this.client.publish({
         destination: '/app/user/status',
         body: JSON.stringify(message)
       });
-      
-      console.log('已发送用户状态消息:', message);
     } else {
-      console.error('WebSocket未连接，无法发送消息');
+      // console.error('WebSocket未连接，无法发送消息');
     }
   }
 
@@ -149,10 +212,8 @@ class WebSocketService {
         destination: '/app/user/info',
         body: JSON.stringify({})
       });
-      
-      console.log('已请求用户信息');
     } else {
-      console.error('WebSocket未连接，无法发送消息');
+      // console.error('WebSocket未连接，无法发送消息');
     }
   }
   
@@ -163,15 +224,14 @@ class WebSocketService {
         destination: '/app/chat',
         body: JSON.stringify(message)
       });
-      
-      console.log('已发送聊天消息:', message);
     } else {
-      console.error('WebSocket未连接，无法发送消息');
+      // console.error('WebSocket未连接，无法发送消息');
     }
   }
 
   // 检查连接状态
   isConnected(): boolean {
+    // console.log('检查WebSocket连接状态:', this.connected);
     return this.connected;
   }
 }

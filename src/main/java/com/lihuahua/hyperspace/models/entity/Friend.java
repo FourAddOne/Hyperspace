@@ -3,27 +3,34 @@ package com.lihuahua.hyperspace.models.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
-import java.util.Date;
-
 @Data
-@TableName("friends")
+@TableName("friend")
 public class Friend {
     
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
     
-    @TableField("user_id")
-    private String userId;
+    @TableField("user_one")
+    private String userOne;
     
-    @TableField("friend_id")
-    private String friendId;
+    @TableField("user_sec")
+    private String userSec;
     
     @TableField("status")
-    private String status; // pending, accepted, blocked
+    private String status; // PENDING, ACCEPTED, REJECTED, BLOCKED
+    
+    @TableField("block_status")
+    private String blockStatus; // NONE, USER_ONE_BLOCKED, USER_SEC_BLOCKED, BOTH_BLOCKED
+    
+    @TableField("user_one_remark")
+    private String userOneRemark;
+    
+    @TableField("user_sec_remark")
+    private String userSecRemark;
     
     @TableField("created_at")
-    private Date createdAt;
+    private Long createdAt;
     
     @TableField("updated_at")
-    private Date updatedAt;
+    private Long updatedAt;
 }

@@ -8,8 +8,10 @@ import com.lihuahua.hyperspace.models.entity.UserSettings;
 import com.lihuahua.hyperspace.models.vo.UserLoginVO;
 import com.lihuahua.hyperspace.models.vo.UserSettingsVO;
 import com.lihuahua.hyperspace.server.UserServer;
+import com.lihuahua.hyperspace.utils.IdUtil;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
 import com.lihuahua.hyperspace.utils.LocalFileUtil;
+import com.lihuahua.hyperspace.utils.OssUtil;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -31,16 +33,11 @@ public class UserServerImpl implements UserServer {
     
     @Override
     public UserLoginVO login(Map<String, String> credential) {
-        System.out.println("开始登录验证，凭据: " + credential);
-        
         String userId = credential.get("userId");
         String email = credential.get("email");
         String password = credential.get("password");
         String ip = credential.get("ip");
-        
-        System.out.println("提取的登录信息 - userId: " + userId + ", email: " + email + ", password: " + password + ", ip: " + ip);
-        
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         if (userId != null && !userId.isEmpty()) {
             queryWrapper.eq("user_id", userId);
         } else if (email != null && !email.isEmpty()) {
@@ -61,25 +58,18 @@ public class UserServerImpl implements UserServer {
         }
         
         // 直接使用User类的login方法进行密码验证
-        System.out.println("开始密码验证 - 数据库中的密码: " + user.getPassword() + ", 输入的密码: " + password);
-        if (!user.login(credential)) {
+         if (!user.login(credential)) {
             System.out.println("错误：密码验证失败");
             throw new RuntimeException("密码错误");
         }
-        
-        System.out.println("密码验证成功");
         
         // 更新登录信息
         user.setLoginIp(ip);
         user.setLoginStatus(true); // 设置用户为在线状态
         userMapper.updateById(user);
-        System.out.println("更新用户登录信息完成");
-        
         // 生成访问令牌和刷新令牌
         String accessToken = JwtTokenUtil.generateAccessToken(user.getUserId());
         String refreshToken = JwtTokenUtil.generateRefreshToken(user.getUserId());
-        System.out.println("生成的访问令牌: " + accessToken);
-        System.out.println("生成的刷新令牌: " + refreshToken);
         
         // 构建返回的用户信息
         UserLoginVO userLoginVO = UserLoginVO.builder()
@@ -92,9 +82,21 @@ public class UserServerImpl implements UserServer {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
-        
-        System.out.println("构建的用户登录VO: " + userLoginVO);
+
         return userLoginVO;
+    }
+    
+    /**
+     * 生成唯一的用户ID，确保在数据库中不存在重复
+     * @return 唯一的11位用户ID
+     */
+    private String generateUniqueUserId() {
+        String userId;
+        do {
+            userId = IdUtil.generateUserId();
+            // 检查数据库中是否已存在该ID
+        } while (userMapper.selectById(userId) != null);
+        return userId;
     }
     
     @Override
@@ -120,7 +122,7 @@ public class UserServerImpl implements UserServer {
         
         // 创建新用户
         User newUser = new User();
-        String userId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String userId = generateUniqueUserId(); // 使用新的唯一ID生成方法
         newUser.setUserId(userId);
         newUser.setUserName(username);
         newUser.setEmail(email);
@@ -168,14 +170,28 @@ public class UserServerImpl implements UserServer {
     
     @Override
     public Boolean updateAvatar(String userId, String newAvatarUrl) {
+        OssUtil ossUtil = new OssUtil();
         User user = userMapper.selectById(userId);
         if (user != null) {
             // 删除旧头像文件（如果存在且不是默认头像）
             String oldAvatarUrl = user.getAvatarUrl();
-            if (oldAvatarUrl != null && oldAvatarUrl.contains("/uploads/")) {
+            if (oldAvatarUrl != null && !oldAvatarUrl.isEmpty()) {
                 try {
-                    localFileUtil.deleteLocalFile(oldAvatarUrl);
-                    System.out.println("已删除用户 " + userId + " 的旧头像: " + oldAvatarUrl);
+                    // 如果是本地文件，使用本地删除方法
+                    if (oldAvatarUrl.startsWith("/uploads/")) {
+                        localFileUtil.deleteLocalFile(oldAvatarUrl);
+                        System.out.println("已删除用户 " + userId + " 的旧头像: " + oldAvatarUrl);
+                    } 
+                    // 如果是OSS文件，调用OSS删除方法
+                    else if (oldAvatarUrl.contains("oss") || oldAvatarUrl.contains("aliyuncs.com")) {
+                        // 实际删除OSS文件
+                        boolean deleted = ossUtil.deleteFileFromOSS(oldAvatarUrl);
+                        if (deleted) {
+                            System.out.println("已删除用户 " + userId + " 的旧OSS头像: " + oldAvatarUrl);
+                        } else {
+                            System.out.println("删除用户 " + userId + " 的旧OSS头像失败: " + oldAvatarUrl);
+                        }
+                    }
                 } catch (Exception e) {
                     System.out.println("删除用户 " + userId + " 的旧头像失败: " + oldAvatarUrl + ", 错误: " + e.getMessage());
                 }
@@ -213,6 +229,7 @@ public class UserServerImpl implements UserServer {
     
     @Override
     public Boolean saveUserSettings(UserSettingsVO userSettingsVO) {
+        OssUtil ossUtil =new OssUtil();
         QueryWrapper<UserSettings> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userSettingsVO.getUserId());
         UserSettings existingSettings = userSettingsMapper.selectOne(wrapper);
@@ -233,8 +250,22 @@ public class UserServerImpl implements UserServer {
                 userSettingsVO.getBackgroundImage() != null &&
                 !existingSettings.getBackgroundImage().equals(userSettingsVO.getBackgroundImage())) {
                 try {
-                    localFileUtil.deleteLocalFile(existingSettings.getBackgroundImage());
-                    System.out.println("已删除用户的旧背景图片: " + existingSettings.getBackgroundImage());
+                    String oldBackgroundImage = existingSettings.getBackgroundImage();
+                    // 如果是本地文件，使用本地删除方法
+                    if (oldBackgroundImage.startsWith("/uploads/")) {
+                        localFileUtil.deleteLocalFile(oldBackgroundImage);
+                        System.out.println("已删除用户的旧背景图片: " + oldBackgroundImage);
+                    }
+                    // 如果是OSS文件，调用OSS删除方法
+                    else if (oldBackgroundImage.contains("oss") || oldBackgroundImage.contains("aliyuncs.com")) {
+                        // 实际删除OSS文件
+                        boolean deleted = ossUtil.deleteFileFromOSS(oldBackgroundImage);
+                        if (deleted) {
+                            System.out.println("已删除用户的旧OSS背景图片: " + oldBackgroundImage);
+                        } else {
+                            System.out.println("删除用户的旧OSS背景图片失败: " + oldBackgroundImage);
+                        }
+                    }
                 } catch (Exception e) {
                     System.out.println("删除用户的旧背景图片失败: " + existingSettings.getBackgroundImage() + ", 错误: " + e.getMessage());
                 }

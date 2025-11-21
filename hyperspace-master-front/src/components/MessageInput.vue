@@ -3,10 +3,12 @@ import { ref } from 'vue'
 
 const message = ref('')
 
+const emit = defineEmits(['send'])
+
 const sendMessage = () => {
   if (message.value.trim()) {
-    // 这里应该发送消息到服务器
-    console.log('发送消息:', message.value)
+    // 发送消息事件给父组件处理
+    emit('send', message.value)
     message.value = ''
   }
 }

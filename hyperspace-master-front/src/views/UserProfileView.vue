@@ -203,6 +203,12 @@ const getFullAvatarUrl = (avatarUrl: string) => {
     // 通过API代理访问上传的文件
     return '/api' + avatarUrl;
   }
+  
+  // 如果avatarUrl是OSS路径，直接返回
+  if (avatarUrl && (avatarUrl.includes('oss') || avatarUrl.includes('aliyuncs.com'))) {
+    return avatarUrl;
+  }
+  
   return avatarUrl || '/src/assets/logo.svg';
 };
 
@@ -216,6 +222,7 @@ const handleAvatarUpload = async (event: Event) => {
       // 创建FormData对象用于文件上传
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('fileType', 'avatar') // 添加文件类型参数
       
       // 上传文件到服务器
       // 修改为直接访问data，因为拦截器现在自动返回response.data
@@ -227,10 +234,10 @@ const handleAvatarUpload = async (event: Event) => {
       
       if (response) {
         // 删除旧头像文件（如果存在且不是默认头像）
-        if (userInfo.value.avatarUrl && userInfo.value.avatarUrl.startsWith('/uploads/')) {
+        if (userInfo.value.avatarUrl) {
           try {
-            await apiClient.delete('/user/settings/background', {
-              params: { imageUrl: userInfo.value.avatarUrl }
+            await apiClient.delete('/file/delete', {
+              params: { fileUrl: userInfo.value.avatarUrl }
             });
           } catch (error) {
             console.warn('删除旧头像失败:', error);
@@ -243,12 +250,18 @@ const handleAvatarUpload = async (event: Event) => {
         // 更新用户头像URL
         userInfo.value.avatarUrl = avatarUrl;
         
-        // 更新用户头像
-        const avatarResponse = await apiClient.post('/user/avatar', null, {
-          params: {
-            avatarUrl: avatarUrl
-          }
-        })
+        // 更新用户头像到数据库
+        try {
+          await apiClient.post('/user/avatar', null, {
+            params: {
+              avatarUrl: avatarUrl
+            }
+          });
+        } catch (error) {
+          console.error('更新数据库头像信息失败:', error);
+          ElMessage.error('头像更新失败，请重试');
+          return;
+        }
         
         // 更新本地存储的用户信息
         const currentUserInfo = getUserInfo()
@@ -283,6 +296,7 @@ const handleBackgroundUpload = async (event: Event) => {
       // 创建FormData对象用于文件上传
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('fileType', 'background') // 添加文件类型参数
       
       // 上传文件到服务器
       // 修改为直接访问data，因为拦截器现在自动返回response.data
@@ -296,8 +310,8 @@ const handleBackgroundUpload = async (event: Event) => {
         // 删除旧的背景图片（如果存在）
         if (settings.value.backgroundImage) {
           try {
-            await apiClient.delete('/user/settings/background', {
-              params: { imageUrl: settings.value.backgroundImage }
+            await apiClient.delete('/file/delete', {
+              params: { fileUrl: settings.value.backgroundImage }
             });
           } catch (error) {
             console.warn('删除旧背景图片失败:', error);
@@ -307,18 +321,33 @@ const handleBackgroundUpload = async (event: Event) => {
         // 确保只传递字符串URL而不是整个响应对象
         const backgroundImageUrl = typeof response === 'string' ? response : response.data;
         
-        // 确保URL是完整的路径
-        let fullBackgroundImageUrl = backgroundImageUrl;
-        if (backgroundImageUrl && backgroundImageUrl.startsWith('/uploads/')) {
-          fullBackgroundImageUrl = '/api' + backgroundImageUrl;
-        } else if (backgroundImageUrl && !backgroundImageUrl.startsWith('http') && !backgroundImageUrl.startsWith('/api')) {
-          // 如果URL不是以http或/api开头，则添加/api前缀
-          fullBackgroundImageUrl = '/api' + (backgroundImageUrl.startsWith('/') ? '' : '/') + backgroundImageUrl;
-        }
+        // 临时保存旧的背景图片URL用于错误回滚
+        const oldBackgroundImage = settings.value.backgroundImage;
         
         // 更新背景图片URL
-        settings.value.backgroundImage = fullBackgroundImageUrl;
-        saveSettings() // 自动保存设置
+        settings.value.backgroundImage = backgroundImageUrl;
+        
+        // 保存设置到数据库
+        try {
+          await saveSettings();
+        } catch (error) {
+          // 如果保存失败，回滚背景图片URL
+          settings.value.backgroundImage = oldBackgroundImage;
+          console.error('保存背景图片设置失败:', error);
+          ElMessage.error('背景图片保存失败，请重试');
+          return;
+        }
+        
+        // 添加下面这行代码来通知聊天界面更新背景
+        window.dispatchEvent(new CustomEvent('backgroundImageChanged', {
+          detail: { backgroundImage: backgroundImageUrl }
+        }));
+        
+        // 同时发送不透明度更新事件，确保透明度设置同步
+        window.dispatchEvent(new CustomEvent('backgroundOpacityChanged', {
+          detail: { opacity: settings.value.backgroundOpacity }
+        }));
+        
         ElMessage.success('背景图片已更新')
       }
     } catch (error: any) {
@@ -336,7 +365,7 @@ const saveSettings = async () => {
     
     if (response && response.data) {
       // 保存到本地存储
-      // 处理背景图片URL
+      // 对于OSS URL，直接保存；对于本地URL，需要添加/api前缀
       let fullBackgroundImageUrl = settings.value.backgroundImage || '';
       if (fullBackgroundImageUrl && fullBackgroundImageUrl.startsWith('/uploads/')) {
         fullBackgroundImageUrl = '/api' + fullBackgroundImageUrl;
@@ -377,6 +406,11 @@ const toggleDarkMode = async () => {
   // 自动保存设置
   const success = await saveSettings()
   
+  // 发送自定义事件通知其他组件更新暗色模式
+  window.dispatchEvent(new CustomEvent('darkModeChanged', {
+    detail: { darkMode: settings.value.darkMode }
+  }));
+  
   if (success) {
     if (settings.value.darkMode) {
       ElMessage.success('已切换到暗色模式')
@@ -402,8 +436,8 @@ const clearBackground = async () => {
   if (settings.value.backgroundImage) {
     try {
       // 删除背景图片文件
-      await apiClient.delete('/user/settings/background', {
-        params: { imageUrl: settings.value.backgroundImage }
+      await apiClient.delete('/file/delete', {
+        params: { fileUrl: settings.value.backgroundImage }
       });
     } catch (error) {
       console.warn('删除背景图片失败:', error);
@@ -412,9 +446,22 @@ const clearBackground = async () => {
   
   settings.value.backgroundImage = '';
   settings.value.backgroundOpacity = 100; // 重置透明度
-  const success = await saveSettings();
-  if (success) {
-    ElMessage.success('背景已清除');
+  
+  try {
+    // 保存设置到数据库
+    const success = await saveSettings();
+    
+    if (success) {
+      // 添加下面这行代码来通知聊天界面更新背景
+      window.dispatchEvent(new CustomEvent('backgroundImageChanged', {
+        detail: { backgroundImage: '' }
+      }));
+      
+      ElMessage.success('背景已清除');
+    }
+  } catch (error) {
+    console.error('清除背景失败:', error);
+    ElMessage.error('背景清除失败，请重试');
   }
 }
 
@@ -524,7 +571,7 @@ onMounted(() => {
             </div>
             <div class="info-item">
               <label>个人签名:</label>
-              <span>{{ settings.personalSignature || '暂无签名' }}</span>
+              <span>{{ settings.personalSignature && settings.personalSignature.length > 30 ? settings.personalSignature.substring(0, 30) + '...' : settings.personalSignature || '暂无签名' }}</span>
             </div>
             <div class="info-item">
               <label>性别:</label>
@@ -833,7 +880,6 @@ onMounted(() => {
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  margin-left: 10px;
 }
 
 .clear-button:hover {

@@ -23,12 +23,10 @@ public class LocalFileUtil {
      * @return 返回文件访问URL
      */
     public String uploadLocalFile(MultipartFile file) throws IOException {
-        System.out.println("开始本地文件上传，上传路径: " + uploadPath);
-        
+
         // 创建上传目录（如果不存在）
         Path uploadDir = Paths.get(uploadPath);
         if (!Files.exists(uploadDir)) {
-            System.out.println("创建上传目录: " + uploadDir.toAbsolutePath());
             Files.createDirectories(uploadDir);
         }
 
@@ -39,7 +37,6 @@ public class LocalFileUtil {
             fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
         String uniqueFilename = UUID.randomUUID().toString() + fileExtension;
-        System.out.println("原始文件名: " + originalFilename + ", 生成文件名: " + uniqueFilename);
 
         // 保存文件
         Path filePath = uploadDir.resolve(uniqueFilename);
@@ -48,7 +45,6 @@ public class LocalFileUtil {
 
         // 返回文件访问URL
         String fileUrl = "/uploads/" + uniqueFilename;
-        System.out.println("文件访问URL: " + fileUrl);
         return fileUrl;
     }
 
