@@ -202,6 +202,95 @@ onMounted(() => {
   width: 100%;
 }
 
+.search-input :deep(.el-input__wrapper) {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.search-input :deep(.el-input__inner) {
+  border: 2px solid #e2e8f0;
+  border-radius: 8px 0 0 8px;
+  padding: 10px 15px;
+  transition: all 0.3s ease;
+  height: 40px;
+}
+
+.search-input :deep(.el-input__inner:focus) {
+  border-color: #0084ff;
+  box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.1);
+}
+
+.search-input :deep(.el-input-group__append) {
+  background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
+  border: 2px solid #0084ff;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.search-input :deep(.el-input-group__append:hover) {
+  background: linear-gradient(135deg, #0066cc 0%, #004a99 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 132, 255, 0.3);
+}
+
+.search-input :deep(.el-button) {
+  color: white;
+  font-weight: 500;
+  padding: 0;
+  min-height: auto;
+  background: transparent;
+  border: none;
+}
+
+.search-input :deep(.el-input__inner) {
+  border: 2px solid #e2e8f0;
+  border-radius: 8px 0 0 8px;
+  padding: 10px 15px;
+  transition: all 0.3s ease;
+  height: 40px;
+}
+
+.search-input :deep(.el-input__inner:focus) {
+  border-color: #0084ff;
+  box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.1);
+}
+
+.search-input :deep(.el-input-group__append) {
+  background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
+  border: 2px solid #0084ff;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.search-input :deep(.el-input-group__append:hover) {
+  background: linear-gradient(135deg, #0066cc 0%, #004a99 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 132, 255, 0.3);
+}
+
+.search-input :deep(.el-button) {
+  color: white;
+  font-weight: 500;
+  padding: 0;
+  min-height: auto;
+  background: transparent;
+  border: none;
+}
+
 .search-results {
   margin-top: 30px;
 }
@@ -267,6 +356,41 @@ onMounted(() => {
   color: #f5f5f5;
 }
 
+.dark-mode .search-input :deep(.el-input__wrapper) {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+}
+
+.dark-mode .search-input :deep(.el-input__inner) {
+  background-color: #2d3748;
+  border-color: #4a5568;
+  color: #f7fafc;
+  height: 40px;
+}
+
+.dark-mode .search-input :deep(.el-input__inner:focus) {
+  border-color: #0084ff;
+  box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.2);
+}
+
+.dark-mode .search-input :deep(.el-input-group__append) {
+  background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
+  border-color: #0084ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dark-mode .search-input :deep(.el-input-group__append:hover) {
+  background: linear-gradient(135deg, #0066cc 0%, #004a99 100%);
+  box-shadow: 0 4px 8px rgba(0, 132, 255, 0.4);
+}
+
+.dark-mode .search-input :deep(.el-button) {
+  color: white;
+}
+
 .dark-mode .search-results h3 {
   border-bottom: 1px solid #444;
 }
@@ -281,5 +405,49 @@ onMounted(() => {
 
 .dark-mode .user-email {
   color: #ccc;
+}
+</style>
+
+<style>
+/* 全局样式覆盖Element Plus默认样式 */
+.el-page-header__left,
+.el-page-header__content {
+  color: #333333 !important;
+}
+
+.el-page-header__left .el-button {
+  color: #333333 !important;
+  border-color: #333333 !important;
+  background-color: transparent !important;
+}
+
+.el-page-header__arrow {
+  color: #333333 !important;
+  border-color: #333333 !important;
+}
+
+.el-page-header__title {
+  color: #333333 !important;
+}
+
+/* 暗色模式样式 */
+.dark-mode .el-page-header__left,
+.dark-mode .el-page-header__content {
+  color: #ffffff !important;
+}
+
+.dark-mode .el-page-header__left .el-button {
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+  background-color: transparent !important;
+}
+
+.dark-mode .el-page-header__arrow {
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+.dark-mode .el-page-header__title {
+  color: #ffffff !important;
 }
 </style>

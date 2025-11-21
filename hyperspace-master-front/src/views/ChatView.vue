@@ -1,125 +1,5 @@
-<template>
-  <div class="chat-view">
-    <div class="chat-container">
-      <div class="chat-sidebar">
-        <div class="chat-sidebar-header">
-          <h2>聊天</h2>
-        </div>
-
-        <div class="conversations-list">
-          <div
-            v-for="conversation in conversations"
-            :key="conversation.id"
-            class="conversation-item"
-            :class="{ active: activeConversation?.id === conversation.id }"
-            @click="selectConversation(conversation)"
-          >
-            <el-avatar :src="getFullAvatarUrl(conversation.avatar)" />
-            <div class="conversation-info">
-              <div class="conversation-name">{{ conversation.name }}</div>
-              <div class="conversation-last-message">{{ conversation.lastMessage }}</div>
-            </div>
-            <div class="conversation-time">{{ conversation.time }}</div>
-            <div class="conversation-status" :class="{ online: conversation.status === '在线' }"></div>
-            <!-- 未读消息红点 -->
-            <div v-if="unreadCounts.get(conversation.id) > 0" class="unread-badge">
-              {{ unreadCounts.get(conversation.id) > 99 ? '99+' : unreadCounts.get(conversation.id) }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="chat-main">
-        <div class="chat-header" v-if="activeConversation">
-          <div class="chat-header-info">
-            <el-avatar :size="40" :src="getFullAvatarUrl(activeConversation.avatar)" />
-            <div class="chat-header-text">
-              <div class="chat-participant-name">{{ activeConversation.name }}</div>
-              <div class="chat-status">{{ activeConversation.status }}</div>
-            </div>
-          </div>
-          <div class="chat-header-actions">
-            <el-button icon="el-icon-more" circle></el-button>
-          </div>
-        </div>
-
-        <!-- 背景容器 -->
-        <div class="chat-background-container" v-if="activeConversation">
-          <!-- 背景图片层 -->
-          <div
-            class="message-background"
-            v-if="backgroundSettings.backgroundImage"
-            :style="backgroundStyle"
-          ></div>
-          <!-- 覆盖层用于控制透明度 -->
-          <div
-            class="message-overlay"
-            v-if="backgroundSettings.backgroundImage"
-            :style="overlayStyle"
-          ></div>
-
-            <div class="chat-messages-container" ref="messagesContainer">
-            <div class="chat-messages">
-              <template v-for="message in messages" :key="message.id">
-                <div v-if="message.showDate" class="message-date-divider">
-                  {{ formatDate(message.createdAt) }}
-                </div>
-                <div
-                  class="message"
-                  :class="{ 'sent': message.isSent, 'received': !message.isSent }"
-                >
-                  <el-avatar v-if="!message.isSent" :src="getFullAvatarUrl(activeConversation.avatar)" class="message-avatar" />
-                  <div class="message-content">
-                     <div class="message-sender-placeholder" v-if="message.isSent"></div>
-                    <div class="message-sender" v-if="!message.isSent">{{ activeConversation.name }}</div>
-                    <div class="message-text">{{ message.text }}</div>
-                    <div class="message-time">{{ message.time }}</div>
-                  </div>
-                  <el-avatar v-if="message.isSent" :src="getFullAvatarUrl(getUserInfo()?.avatarUrl)" class="message-avatar" />
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <div class="chat-input-area" v-if="activeConversation">
-          <div class="chat-input-tools">
-            <el-button icon="el-icon-picture" circle size="small"></el-button>
-            <el-button icon="el-icon-folder" circle size="small"></el-button>
-          </div>
-          <el-input
-            v-model="newMessage"
-            type="textarea"
-            :rows="2"
-            placeholder="输入消息..."
-            @keyup.enter="sendMessage"
-            class="message-input"
-          ></el-input>
-          <div class="chat-input-actions">
-            <el-button
-              type="primary"
-              @click="sendMessage"
-              :disabled="!newMessage.trim()"
-              size="small"
-            >
-              发送
-            </el-button>
-          </div>
-        </div>
-
-        <div class="chat-placeholder" v-else>
-          <div class="placeholder-content">
-            <i class="el-icon-chat-dot-round placeholder-icon"></i>
-            <p>选择一个聊天或开始新对话</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed, onUnmounted, watch, reactive } from 'vue'
+import { ref, onMounted, nextTick, computed, onUnmounted, watch, reactive, onActivated } from 'vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '../services/api'
 import { useRoute } from 'vue-router'
@@ -173,26 +53,6 @@ const backgroundStyle = computed(() => {
   }
 })
 
-// 格式化日期显示
-const formatDate = (date: string) => {
-  const messageDate = new Date(date);
-  const today = new Date();
-
-  // 检查是否是今天
-  if (messageDate.toDateString() === today.toDateString()) {
-    return '今天';
-  }
-
-  // 检查是否是昨天
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (messageDate.toDateString() === yesterday.toDateString()) {
-    return '昨天';
-  }
-
-  // 其他日期格式化为年月日
-  return `${messageDate.getFullYear()}年${messageDate.getMonth() + 1}月${messageDate.getDate()}日`;
-}
 
 // 计算覆盖层样式
 const overlayStyle = computed(() => {
@@ -223,6 +83,29 @@ const overlayStyle = computed(() => {
   }
 })
 
+// 格式化日期显示
+const formatDate = (date: string) => {
+  const messageDate = new Date(date);
+  const today = new Date();
+
+  // 检查是否是今天
+  if (messageDate.toDateString() === today.toDateString()) {
+    return '今天';
+  }
+
+  // 检查是否是昨天
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (messageDate.toDateString() === yesterday.toDateString()) {
+    return '昨天';
+  }
+
+  // 其他日期格式化为年月日
+  return `${messageDate.getFullYear()}年${messageDate.getMonth() + 1}月${messageDate.getDate()}日`;
+}
+
+
+
 // 更新背景设置
 const updateBackgroundSettings = () => {
   const savedBackgroundImage = localStorage.getItem('userBackgroundImage')
@@ -241,15 +124,32 @@ const updateBackgroundSettings = () => {
   }
 }
 
+// 添加处理暗色模式变化事件
+const handleDarkModeChanged = (e: CustomEvent) => {
+  const detail = e.detail as { darkMode: boolean };
+  document.body.classList.toggle('dark-mode', detail.darkMode);
+  
+  // 在亮色模式下清除body的背景图片
+  if (!detail.darkMode) {
+    document.body.style.backgroundImage = 'none';
+  }
+};
+
 // 处理背景透明度变化事件
 const handleBackgroundOpacityChanged = (e: CustomEvent) => {
   const detail = e.detail as { opacity: number };
   backgroundSettings.value.backgroundOpacity = detail.opacity;
 };
 
+// 添加处理背景图片变化事件
+const handleBackgroundImageChanged = (e: CustomEvent) => {
+  const detail = e.detail as { backgroundImage: string };
+  backgroundSettings.value.backgroundImage = detail.backgroundImage;
+};
+
 // 处理存储变化事件
 const handleStorageChanged = (e: StorageEvent) => {
-  if (e.key === 'userBackgroundImage' || e.key === 'userBackgroundOpacity') {
+  if (e.key === 'userBackgroundImage' || e.key === 'userBackgroundOpacity' || e.key === 'userDarkMode') {
     updateBackgroundSettings()
   }
 };
@@ -264,9 +164,7 @@ const handleUserStatusChange = (data: any) => {
     return;
   }
 
-  console.log('变更前的conversations:', JSON.parse(JSON.stringify(conversations.value)));
-  console.log('变更前的activeConversation:', JSON.parse(JSON.stringify(activeConversation.value)));
-
+  // 使用Vue的响应式系统更新状态
   // 直接修改数组元素以确保响应式更新
   for (let i = 0; i < conversations.value.length; i++) {
     if (conversations.value[i].id === data.userId) {
@@ -274,24 +172,19 @@ const handleUserStatusChange = (data: any) => {
       // 直接修改数组元素的属性
       conversations.value[i].status = data.status ? '在线' : '离线';
       console.log(`用户状态已更新为: ${conversations.value[i].status}`);
+
+      // 如果当前活跃会话是该用户，也更新活跃会话的状态
+      if (activeConversation.value && activeConversation.value.id === data.userId) {
+        console.log(`更新当前会话用户 ${data.userId} 状态`);
+        activeConversation.value.status = data.status ? '在线' : '离线';
+        console.log('当前会话已更新');
+      }
+
+      // 强制触发Vue的响应式更新
+      conversations.value = [...conversations.value];
       break;
     }
   }
-
-  console.log('会话列表已更新');
-
-  // 如果当前活跃会话是该用户，也更新活跃会话的状态
-  if (activeConversation.value && activeConversation.value.id === data.userId) {
-    console.log(`更新当前会话用户 ${data.userId} 状态`);
-    activeConversation.value.status = data.status ? '在线' : '离线';
-    console.log('当前会话已更新');
-  }
-
-  // 触发全局事件以通知其他组件
-  const event = new CustomEvent('userStatusChange', { detail: data });
-  window.dispatchEvent(event);
-
-  console.log('用户状态变更处理完成');
 };
 
 // 处理实时消息
@@ -436,7 +329,7 @@ const sendMessage = async () => {
   try {
     // 构造本地消息对象（用于立即显示）
     const localMessage = {
-      id: Date.now().toString(), // 临时ID
+      id: 'temp_' + Date.now().toString(), // 临时ID
       text: newMessage.value,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isSent: true,
@@ -454,7 +347,8 @@ const sendMessage = async () => {
     if (globalWebSocketManager.isConnected()) {
       const messageDTO = {
         receiverId: activeConversation.value.id,
-        content: newMessage.value
+        content: newMessage.value,
+        createdAt: new Date().toISOString()
       };
 
       globalWebSocketManager.sendMessage(messageDTO);
@@ -523,7 +417,6 @@ watch(() => route.path, (newPath) => {
 const loadConversations = async () => {
   try {
     const response = await apiClient.get('/api/friends/list')
-    console.log('好友列表数据:', response.data); // 添加日志以便调试
     conversations.value = response.data.map((friend: any) => ({
       id: friend.userId,
       name: friend.userName,
@@ -532,8 +425,6 @@ const loadConversations = async () => {
       time: '',
       status: friend.loginStatus ? '在线' : '离线'
     }))
-
-    console.log('初始化的conversations:', JSON.parse(JSON.stringify(conversations.value)));
 
     // 获取未读消息数量
     if (conversations.value.length > 0) {
@@ -596,18 +487,14 @@ const refreshUnreadCounts = async () => {
 
 // 组件挂载
 onMounted(() => {
-  // 设置WebSocket回调
-  globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
-  globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
+  // 监听全局用户状态变更事件
+  window.addEventListener('userStatusChange', handleGlobalUserStatusChange);
 
-  // 增加WebSocket连接引用计数
-  globalWebSocketManager.incrementConnection();
+  // 监听全局实时消息事件
+  window.addEventListener('realTimeMessage', handleGlobalRealTimeMessage);
 
   // 加载会话列表
   loadConversations()
-
-  // 监听全局用户状态变更事件
-  window.addEventListener('userStatusChange', handleGlobalUserStatusChange);
 
   // 检查并应用暗色模式
   const savedDarkMode = localStorage.getItem('userDarkMode')
@@ -624,10 +511,44 @@ onMounted(() => {
 
   // 监听自定义背景透明度变化事件
   window.addEventListener('backgroundOpacityChanged', handleBackgroundOpacityChanged as EventListener);
+  
+  // 监听自定义背景图片变化事件
+  window.addEventListener('backgroundImageChanged', handleBackgroundImageChanged as EventListener);
+  
+  // 监听暗色模式变化事件
+  window.addEventListener('darkModeChanged', handleDarkModeChanged as EventListener);
 
   // 监听localStorage变化
   window.addEventListener('storage', handleStorageChanged);
 
+  // 设置定时刷新未读消息数量
+  unreadRefreshInterval.value = window.setInterval(() => {
+    refreshUnreadCounts();
+  }, 30000); // 每30秒刷新一次
+})
+
+// 组件卸载
+onUnmounted(() => {
+  // 移除全局用户状态变更事件监听器
+  window.removeEventListener('userStatusChange', handleGlobalUserStatusChange);
+
+  // 移除全局实时消息事件监听器
+  window.removeEventListener('realTimeMessage', handleGlobalRealTimeMessage);
+
+  // 清理事件监听器
+  window.removeEventListener('backgroundOpacityChanged', handleBackgroundOpacityChanged as EventListener);
+  window.removeEventListener('backgroundImageChanged', handleBackgroundImageChanged as EventListener);
+  window.removeEventListener('darkModeChanged', handleDarkModeChanged as EventListener);
+  window.removeEventListener('storage', handleStorageChanged);
+
+  // 清理定时器
+  if (unreadRefreshInterval.value) {
+    clearInterval(unreadRefreshInterval.value);
+  }
+})
+
+// 组件激活时检查是否有需要选择的好友
+onActivated(() => {
   // 检查是否有从好友列表传递过来的选中好友
   const selectedFriend = localStorage.getItem('selectedFriendForChat');
   if (selectedFriend) {
@@ -652,38 +573,148 @@ onMounted(() => {
       console.error('解析选中好友信息失败:', e);
     }
   }
-
-  // 设置定时刷新未读消息数量
-  unreadRefreshInterval.value = window.setInterval(() => {
-    refreshUnreadCounts();
-  }, 30000); // 每30秒刷新一次
-})
-
-// 组件卸载
-onUnmounted(() => {
-  // 减少WebSocket连接引用计数
-  globalWebSocketManager.decrementConnection();
-
-  // 移除全局用户状态变更事件监听器
-  window.removeEventListener('userStatusChange', handleGlobalUserStatusChange);
-
-  // 清理事件监听器
-  window.removeEventListener('backgroundOpacityChanged', handleBackgroundOpacityChanged as EventListener);
-  window.removeEventListener('storage', handleStorageChanged);
-
-  // 清理定时器
-  if (unreadRefreshInterval.value) {
-    clearInterval(unreadRefreshInterval.value);
-  }
-})
+});
 
 // 处理全局用户状态变更事件
 const handleGlobalUserStatusChange = (event: Event) => {
-  console.log('收到全局用户状态变更事件:', event);
+  console.log('ChatView收到用户状态变更事件');
   const customEvent = event as CustomEvent;
   handleUserStatusChange(customEvent.detail);
 };
+
+// 处理全局实时消息事件
+const handleGlobalRealTimeMessage = (event: Event) => {
+  console.log('ChatView收到实时消息事件');
+  const customEvent = event as CustomEvent;
+  handleRealTimeMessage(customEvent.detail);
+};
 </script>
+
+
+
+
+
+
+<template>
+  <div class="chat-view">
+    <div class="chat-container">
+      <div class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <h2>聊天</h2>
+        </div>
+        
+        <div class="conversations-list">
+          <div 
+            v-for="conversation in conversations" 
+            :key="conversation.id"
+            class="conversation-item"
+            :class="{ active: activeConversation?.id === conversation.id }"
+            @click="selectConversation(conversation)"
+          >
+            <el-avatar :src="getFullAvatarUrl(conversation.avatar)" />
+            <div class="conversation-info">
+              <div class="conversation-name">{{ conversation.name }}</div>
+              <div class="conversation-last-message">{{ conversation.lastMessage }}</div>
+            </div>
+            <div class="conversation-time">{{ conversation.time }}</div>
+            <div class="conversation-status" :class="{ online: conversation.status === '在线' }"></div>
+            <!-- 未读消息红点 -->
+            <div v-if="unreadCounts.get(conversation.id) > 0" class="unread-badge">
+              {{ unreadCounts.get(conversation.id) > 99 ? '99+' : unreadCounts.get(conversation.id) }}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="chat-main">
+        <div class="chat-header" v-if="activeConversation">
+          <div class="chat-header-info">
+            <el-avatar :size="40" :src="getFullAvatarUrl(activeConversation.avatar)" />
+            <div class="chat-header-text">
+              <div class="chat-participant-name">{{ activeConversation.name }}</div>
+              <div class="chat-status">{{ activeConversation.status }}</div>
+            </div>
+          </div>
+          <div class="chat-header-actions">
+            <el-button icon="el-icon-more" circle></el-button>
+          </div>
+        </div>
+        
+        <!-- 背景容器 -->
+        <div class="chat-background-container" v-if="activeConversation">
+          <!-- 背景图片层 -->
+          <div 
+            class="message-background" 
+            v-if="backgroundSettings.backgroundImage"
+            :style="backgroundStyle"
+          ></div>
+          <!-- 覆盖层用于控制透明度 -->
+          <div 
+            class="message-overlay" 
+            v-if="backgroundSettings.backgroundImage"
+            :style="overlayStyle"
+          ></div>
+          
+            <div class="chat-messages-container" ref="messagesContainer">
+            <div class="chat-messages">
+              <template v-for="message in messages" :key="message.id">
+                <div v-if="message.showDate" class="message-date-divider">
+                  {{ formatDate(message.createdAt) }}
+                </div>
+                <div 
+                  class="message"
+                  :class="{ 'sent': message.isSent, 'received': !message.isSent }"
+                >
+                  <el-avatar v-if="!message.isSent" :src="getFullAvatarUrl(activeConversation.avatar)" class="message-avatar" />
+                  <div class="message-content">
+                     <div class="message-sender-placeholder" v-if="message.isSent"></div>
+                    <div class="message-sender" v-if="!message.isSent">{{ activeConversation.name }}</div>
+                    <div class="message-text">{{ message.text }}</div>
+                    <div class="message-time">{{ message.time }}</div>
+                  </div>
+                  <el-avatar v-if="message.isSent" :src="getFullAvatarUrl(getUserInfo()?.avatarUrl)" class="message-avatar" />
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+        
+        <div class="chat-input-area" v-if="activeConversation">
+          <div class="chat-input-tools">
+            <el-button icon="el-icon-picture" circle size="small"></el-button>
+            <el-button icon="el-icon-folder" circle size="small"></el-button>
+          </div>
+          <el-input
+            v-model="newMessage"
+            type="textarea"
+            :rows="2"
+            placeholder="输入消息..."
+            @keyup.enter="sendMessage"
+            class="message-input"
+          ></el-input>
+          <div class="chat-input-actions">
+            <el-button 
+              type="primary" 
+              @click="sendMessage"
+              :disabled="!newMessage.trim()"
+              size="small"
+            >
+              发送
+            </el-button>
+          </div>
+        </div>
+        
+        <div class="chat-placeholder" v-else>
+          <div class="placeholder-content">
+            <i class="el-icon-chat-dot-round placeholder-icon"></i>
+            <p>选择一个聊天或开始新对话</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
 
 <style scoped>
 .chat-view {
@@ -898,6 +929,11 @@ const handleGlobalUserStatusChange = (event: Event) => {
   flex: 1;
   position: relative;
   overflow: hidden;
+  background-color: #ffffff; /* 添加默认背景色 */
+}
+
+.dark-mode .chat-background-container {
+  background-color: #1a1a1a; /* 暗色模式下的背景色 */
 }
 
 .chat-messages-container {

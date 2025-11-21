@@ -137,36 +137,11 @@ export const getFullAvatarUrl = (avatarUrl: string): string => {
     // 通过API代理访问上传的文件
     return '/api' + avatarUrl;
   }
-  return avatarUrl || '/src/assets/logo.svg';
-};
-
-/**
- * 保存用户设置到localStorage
- * @param settings 用户设置对象
- */
-export const saveUserSettings = (settings: UserSettings): void => {
-  localStorage.setItem(`userSettings_${settings.userId}`, JSON.stringify(settings));
-};
-
-/**
- * 从localStorage获取用户设置
- * @param userId 用户ID
- * @returns 用户设置对象或null
- */
-export const getUserSettings = (userId: string): UserSettings | null => {
-  const settingsStr = localStorage.getItem(`userSettings_${userId}`);
-  if (settingsStr) {
-    try {
-      const parsed = JSON.parse(settingsStr);
-      // 检查是否是{code, msg, data}格式的响应
-      if (parsed.data) {
-        return parsed.data;
-      }
-      return parsed;
-    } catch (e) {
-      console.error('解析用户设置失败:', e);
-      return null;
-    }
+  
+  // 如果avatarUrl是OSS路径，直接返回
+  if (avatarUrl && (avatarUrl.includes('oss') || avatarUrl.includes('aliyuncs.com'))) {
+    return avatarUrl;
   }
-  return null;
+  
+  return avatarUrl || '/src/assets/logo.svg';
 };

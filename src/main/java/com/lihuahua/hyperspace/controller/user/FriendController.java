@@ -84,4 +84,17 @@ public class FriendController {
             return ResVO.fail(e.getMessage());
         }
     }
+    
+    // 更新好友备注
+    @PostMapping("/remark")
+    public ResVO<?> updateFriendRemark(@RequestParam String friendId,
+                                      @RequestParam String remark,
+                                      @RequestAttribute("userId") String userId) {
+        try {
+            friendServer.updateFriendRemark(userId, friendId, remark);
+            return ResVO.success("备注已更新");
+        } catch (Exception e) {
+            return ResVO.fail(e.getMessage());
+        }
+    }
 }

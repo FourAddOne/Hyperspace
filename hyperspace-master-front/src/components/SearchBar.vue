@@ -1,7 +1,21 @@
 <script setup lang="ts">
+defineProps({
+  onSearch: {
+    type: Function,
+    required: false
+  }
+})
+
 import { ref } from 'vue'
 
 const searchQuery = ref('')
+
+const handleSearch = () => {
+  // 如果提供了onSearch回调，则调用它
+  if (typeof onSearch === 'function') {
+    onSearch(searchQuery.value)
+  }
+}
 </script>
 
 <template>
@@ -11,8 +25,9 @@ const searchQuery = ref('')
       type="text" 
       placeholder="搜索" 
       class="search-input"
+      @keyup.enter="handleSearch"
     />
-    <span class="search-icon">🔍</span>
+    <span class="search-icon" @click="handleSearch">🔍</span>
   </div>
 </template>
 

@@ -1,30 +1,52 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import Sidebar from './Sidebar.vue'
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, onActivated } from 'vue'
 import globalWebSocketManager from '../services/globalWebSocketManager'
 
 // 处理用户状态变更
 const handleUserStatusChange = (data: any) => {
   console.log('用户状态变更 (来自MainLayout):', data);
-  // 这里可以处理全局的用户状态变更，比如更新用户存储等
-  // 通过事件总线或全局状态管理将状态变更传播到其他组件
+  // 通过全局事件将状态变更传播到其他组件
   window.dispatchEvent(new CustomEvent('userStatusChange', { detail: data }));
 };
 
+// 处理实时消息
+const handleRealTimeMessage = (data: any) => {
+  console.log('收到实时消息 (来自MainLayout):', data);
+  // 通过全局事件将消息传播到其他组件
+  window.dispatchEvent(new CustomEvent('realTimeMessage', { detail: data }));
+};
+
 onMounted(() => {
-  console.log('MainLayout挂载，设置WebSocket回调并增加连接引用');
   // 设置WebSocket回调并增加连接引用
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
+  globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
   globalWebSocketManager.incrementConnection();
-  console.log('WebSocket连接引用已增加');
+  console.log('WebSocket连接初始化完成，当前连接数:', globalWebSocketManager.getConnectionCount());
 })
 
 onUnmounted(() => {
-  console.log('MainLayout卸载，减少WebSocket连接引用计数');
+  console.log('MainLayout卸载，清理WebSocket连接');
+  // 移除事件监听器
+  window.removeEventListener('userStatusChange', handleUserStatusChange);
+  window.removeEventListener('realTimeMessage', handleRealTimeMessage);
+  
   // 减少连接引用计数
   globalWebSocketManager.decrementConnection();
-  console.log('WebSocket连接引用已减少');
+})
+
+// 添加activated钩子确保组件激活时WebSocket回调正确设置
+onActivated(() => {
+  console.log('MainLayout激活，确保WebSocket连接，当前连接数:', globalWebSocketManager.getConnectionCount());
+  globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
+  globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
+  globalWebSocketManager.incrementConnection();
+  
+  // 确保用户状态是最新的
+  if (globalWebSocketManager.isConnected()) {
+    globalWebSocketManager.sendUserStatus(true);
+  }
 })
 </script>
 
@@ -32,7 +54,11 @@ onUnmounted(() => {
   <div class="main-layout">
     <Sidebar class="sidebar" />
     <div class="content">
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <keep-alive>
+          <component :is="Component" />
+        </keep-alive>
+      </RouterView>
     </div>
   </div>
 </template>

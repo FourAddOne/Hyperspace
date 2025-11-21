@@ -7,9 +7,6 @@ const props = defineProps({
     required: true
   }
 })
-
-// 模拟选中会话
-const selectedConversation = ref(1)
 </script>
 
 <template>
@@ -18,8 +15,6 @@ const selectedConversation = ref(1)
       v-for="conversation in conversations" 
       :key="conversation.id"
       class="conversation-item"
-      :class="{ active: conversation.id === selectedConversation }"
-      @click="selectedConversation = conversation.id"
     >
       <div class="avatar">
         <img src="../assets/logo.svg" alt="avatar" />
