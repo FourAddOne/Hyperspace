@@ -24,9 +24,9 @@ public class GroupServerImpl implements GroupServer {
     public void createGroup(GroupDTO groupDTO) {
 
         groupDTO.addMember(groupDTO.getUserId());
-        groupMapper.joinGroup(groupDTO.getGroupId(), groupDTO.getUserId(),"OWNER");
-        groupMapper.createGroup(groupDTO.getGroupName(), groupDTO.getGroupId(), groupDTO.getUserId(),JacksonUtils.toJson(groupDTO.getMembers()));
 
+        groupMapper.createGroup(groupDTO.getGroupName(), groupDTO.getGroupId(), groupDTO.getUserId(),JacksonUtils.toJson(groupDTO.getMembers()));
+        groupMapper.joinGroup(groupDTO.getGroupId(), groupDTO.getUserId(),"OWNER");
 
 
     }

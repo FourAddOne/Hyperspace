@@ -13,8 +13,8 @@
 
     <!-- 加入群组 -->
     <insert id="joinGroup">
-        INSERT INTO group_member (group_id, user_id, join_time,role)
-        VALUES (#{groupId}, #{userId}, NOW(),#{role})id
+        INSERT INTO group_member (group_id, user_id, joined_at,role)
+        VALUES (#{groupId}, #{userId}, NOW(),#{role})
     </insert>
 
     <!-- 退出群组 -->
