@@ -1,0 +1,47 @@
+@startuml
+title IChat系统 - 核心实体类
+
+class User {
+    + userId: String
+    + userName: String
+    + avatarUrl: String
+    + password: String
+    + lastReadTs: Long
+    + loginStatus: Boolean
+    + login(credential: Map): Boolean
+    + logout(): Boolean
+    + updateLastReadTs(ts: Long): Boolean
+    + updateAvatar(ossPath: String): Boolean
+}
+
+class Friend {
+    + userOne: String
+    + userSec: String
+    + status: String
+    + blockStatus: String
+    + userOneRemark: String
+    + userSecRemark: String
+    + createdAt: Long
+    + updatedAt: Long
+}
+
+class Message {
+    + messageId: String
+    + type: String
+    + from: String
+    + to: String
+    + textContent: String
+    + imageUrls: List
+    + sendTs: Long
+    + isUnread: Boolean
+    + isRecalled: Boolean
+    + markAsRead(): Boolean
+    + recall(): Boolean
+}
+
+' 实体间关系
+User "1" -- "*" Friend: 拥有
+User "1" -- "*" Message: 发送
+User "1" -- "*" Message: 接收
+
+@enduml

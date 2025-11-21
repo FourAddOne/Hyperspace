@@ -1,0 +1,22 @@
+@startuml
+title 发送消息时序图
+
+actor "用户A" as UserA
+actor "用户B" as UserB
+
+participant "前端" as Frontend
+participant "WebSocket\n服务器" as WebSocket
+participant "消息服务" as MessageService
+participant "RabbitMQ" as RabbitMQ
+participant "数据库" as Database
+
+UserA -> Frontend: 输入消息并发送
+Frontend -> WebSocket: 通过WebSocket发送消息
+WebSocket -> MessageService: 调用消息服务
+MessageService -> RabbitMQ: 将消息放入队列
+MessageService -> Database: 存储消息
+RabbitMQ -> WebSocket: 推送消息到接收方
+WebSocket -> Frontend: 推送消息到用户B前端
+Frontend -> UserB: 显示消息
+
+@enduml

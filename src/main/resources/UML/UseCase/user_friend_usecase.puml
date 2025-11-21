@@ -1,0 +1,31 @@
+@startuml
+title 用户与好友用例图
+
+actor "用户" as User
+
+User --> (添加好友)
+User --> (删除好友)
+User --> (发送消息)
+User --> (接收消息)
+User --> (查看好友列表)
+User --> (搜索好友)
+User --> (屏蔽好友)
+User --> (修改好友备注)
+
+note right of (发送消息)
+  用户可以向好友发送文本消息
+end note
+
+note right of (接收消息)
+  用户可以接收来自好友的消息
+end note
+
+note right of (添加好友)
+  用户可以通过ID添加其他用户为好友
+end note
+
+note right of (查看好友列表)
+  用户可以查看自己的好友列表
+end note
+
+@enduml
