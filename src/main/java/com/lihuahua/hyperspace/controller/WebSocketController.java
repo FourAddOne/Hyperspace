@@ -150,6 +150,28 @@ public class WebSocketController {
         }
     }
 
+
+    /**
+     * 处理群组聊天消息
+     */
+    @MessageMapping("/group/chat")
+    public void handleGroupMessage(@Payload MessageDTO messageDTO, Principal principal) {
+        if (principal == null) return;
+
+        messageDTO.setSenderId(principal.getName());
+        messageDTO.setCreatedAt(new Date());
+
+        // 保存消息到数据库
+        messageServer.sendMessage(messageDTO);
+
+        // 广播消息到群组
+        messagingTemplate.convertAndSend(
+            "/group/" + messageDTO.getReceiverId(),
+            messageDTO
+        );
+    }
+
+
     /**
      * 当用户连接时更新其在线状态
      */

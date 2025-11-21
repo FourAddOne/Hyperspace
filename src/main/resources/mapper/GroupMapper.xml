@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.lihuahua.hyperspace.mapper.GroupMapper">
+
+    <!-- 创建群组 -->
+    <insert id="createGroup">
+        INSERT INTO `group` (group_name, group_id, creator_id, created_at, updated_at,members)
+        VALUES (#{groupName}, #{groupId}, #{userId}, NOW(), NOW(),#{members})
+    </insert>
+
+    <!-- 加入群组 -->
+    <insert id="joinGroup">
+        INSERT INTO group_member (group_id, user_id, joined_at,role)
+        VALUES (#{groupId}, #{userId}, NOW(),#{role})
+    </insert>
+
+    <!-- 退出群组 -->
+    <delete id="quitGroup">
+        DELETE FROM group_user
+        WHERE group_id = #{groupId} AND user_id = #{userId}
+    </delete>
+
+    <!-- 群组消息 -->
+    <insert id="groupMessage">
+        INSERT INTO group_message (group_id, user_id, message, create_time)
+        VALUES (#{groupId}, #{userId}, #{message}, NOW())
+    </insert>
+
+
+
+    <!-- 群组用户列表 -->
+    <select id="groupUserList" resultType="com.lihuahua.hyperspace.models.entity.User">
+        SELECT u.*
+        FROM user u
+        JOIN group_user gu ON u.id = gu.user_id
+        WHERE gu.group_id = #{groupId}
+    </select>
+    <select id="groupListbyUserId" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
+        SELECT g.group_name,g.group_id
+        FROM `group_member`
+        where user_id=#{userId}
+
+    </select>
+
+</mapper>

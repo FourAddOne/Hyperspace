@@ -1,3 +1,4 @@
+// 在 template 部分修改
 <template>
   <div class="group-view">
     <div class="group-container">
@@ -10,21 +11,25 @@
         </div>
 
         <div class="search-box">
-          <el-input placeholder="搜索群组" />
+          <el-input
+              v-model="searchKeyword"
+              placeholder="搜索群组"
+              @keyup.enter="searchGroups"
+          />
         </div>
 
         <div class="groups-list">
           <div
-            v-for="group in groups"
-            :key="group.id"
-            class="group-item"
-            :class="{ active: selectedGroup?.id === group.id }"
-            @click="selectGroup(group)"
+              v-for="group in filteredGroups"
+              :key="group.groupId"
+              class="group-item"
+              :class="{ active: selectedGroup?.groupId === group.groupId }"
+              @click="selectGroup(group)"
           >
             <el-avatar :icon="ChatLineSquare" />
             <div class="group-info">
-              <div class="group-name">{{ group.name }}</div>
-              <div class="group-description">{{ group.description || '暂无描述' }}</div>
+              <div class="group-name">{{ group.groupName }}</div>
+              <div class="group-description">创建于 {{ formatDate(group.createdAt) }}</div>
             </div>
             <div class="group-members">
               {{ group.memberCount }}人
@@ -38,12 +43,19 @@
           <div class="group-header-info">
             <el-avatar :icon="ChatLineSquare" :size="40" />
             <div class="group-header-text">
-              <div class="group-name-header">{{ selectedGroup.name }}</div>
+              <div class="group-name-header">{{ selectedGroup.groupName }}</div>
               <div class="group-member-count">{{ selectedGroup.memberCount }}名成员</div>
             </div>
           </div>
           <div class="group-header-actions">
-            <el-button @click="enterGroupChat(selectedGroup.id)">进入聊天</el-button>
+            <el-button @click="enterGroupChat(selectedGroup.groupId)">进入聊天</el-button>
+            <el-button
+                v-if="selectedGroup.ownerId !== userStore.userId"
+                type="danger"
+                @click="quitGroup(selectedGroup.groupId)"
+            >
+              退出群组
+            </el-button>
           </div>
         </div>
 
@@ -52,15 +64,19 @@
             <h3>群组信息</h3>
             <div class="group-detail-item">
               <span class="label">群组名称:</span>
-              <span>{{ selectedGroup.name }}</span>
+              <span>{{ selectedGroup.groupName }}</span>
             </div>
             <div class="group-detail-item">
-              <span class="label">群组描述:</span>
-              <span>{{ selectedGroup.description || '暂无描述' }}</span>
+              <span class="label">创建时间:</span>
+              <span>{{ formatDate(selectedGroup.createdAt) }}</span>
             </div>
             <div class="group-detail-item">
               <span class="label">成员数量:</span>
               <span>{{ selectedGroup.memberCount }}人</span>
+            </div>
+            <div class="group-detail-item">
+              <span class="label">群主:</span>
+              <span>{{ selectedGroup.ownerId === userStore.userId ? '我' : selectedGroup.ownerId }}</span>
             </div>
           </div>
         </div>
@@ -76,6 +92,7 @@
     </div>
   </div>
 </template>
+
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
@@ -104,31 +121,12 @@ const selectedGroup = ref<Group | null>(null)
 const fetchGroups = async () => {
   loading.value = true
   try {
-    // 暂时使用模拟数据替代API调用
-    // const response = await apiClient.get(API_ENDPOINTS.GROUPS)
-    // groups.value = response.data
-
-    // 模拟数据
-    groups.value = [
-      {
-        id: '1',
-        name: '群群群',
-        description: 'aaa',
-        memberCount: 25
-      },
-      {
-        id: '2',
-        name: '啥群',
-        description: '？',
-        memberCount: 18
-      },
-      {
-        id: '3',
-        name: 'M78星云聊天室',
-        description: '11持',
-        memberCount: 12
+    const response = await apiClient.get('/api/groups/list', {
+      params: {
+        userId: userStore.userId
       }
-    ]
+    })
+    groups.value = response.data
   } catch (error) {
     ElMessage.error('获取群组列表失败')
     console.error('获取群组列表失败:', error)
@@ -142,11 +140,73 @@ const selectGroup = (group: Group) => {
   selectedGroup.value = group
 }
 
-// 创建新群组
-const createGroup = () => {
-  router.push('/group/create')
+const createGroup = async () => {
+  try {
+    const response = await apiClient.post('/api/groups/create', {
+      groupName: '新群组',
+      ownerId: userStore.userId
+    })
+    if (response.code === 200) {
+      ElMessage.success('创建群组成功')
+      await fetchGroups() // 刷新群组列表
+    }
+  } catch (error) {
+    ElMessage.error('创建群组失败')
+    console.error('创建群组失败:', error)
+  }
 }
-
+// 加入群组
+const joinGroup = async (groupId: string) => {
+  try {
+    const response = await apiClient.post('/api/groups/join', null, {
+      params: {
+        groupId,
+        userId: userStore.userId
+      }
+    })
+    if (response.code === 200) {
+      ElMessage.success('加入群组成功')
+      await fetchGroups() // 刷新群组列表
+    }
+  } catch (error) {
+    ElMessage.error('加入群组失败')
+    console.error('加入群组失败:', error)
+  }
+}
+// 退出群组
+const quitGroup = async (groupId: string) => {
+  try {
+    const response = await apiClient.post('/api/groups/quit', null, {
+      params: {
+        groupId,
+        userId: userStore.userId
+      }
+    })
+    if (response.code === 200) {
+      ElMessage.success('退出群组成功')
+      await fetchGroups() // 刷新群组列表
+      selectedGroup.value = null // 清除选中状态
+    }
+  } catch (error) {
+    ElMessage.error('退出群组失败')
+    console.error('退出群组失败:', error)
+  }
+}
+// 获取群组成员
+const getGroupMembers = async (groupId: string) => {
+  try {
+    const response = await apiClient.get('/api/groups/members', {
+      params: {
+        groupId
+      }
+    })
+    return response.data
+  } catch (error) {
+    ElMessage.error('获取群组成员失败')
+    console.error('获取群组成员失败:', error)
+    return []
+  }
+}
 // 进入群组聊天
 const enterGroupChat = (groupId: string) => {
   router.push(`/group/${groupId}/chat`)

@@ -38,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers("/user/login", "/user/register").permitAll()
                         // 2. WebSocket端点
                         .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("api/groups/**").permitAll()
                         // 3. 静态资源
                         .requestMatchers("/uploads/**").permitAll()
                         // 4. Knife4j/Swagger 接口文档放行（补充完整路径）

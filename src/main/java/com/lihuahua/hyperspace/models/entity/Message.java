@@ -8,24 +8,27 @@ import java.util.Date;
 @Data
 @TableName("messages")
 public class Message {
-    
+    @TableField("sender_id")
+    private String senderId;
+
+    @TableField("receiver_id")
+    private String receiverId;
+
+    @TableField("content")
+    private String content;
+
+
     @TableId(value = "message_id")
     private String messageId;
     
     @TableField("conversation_id")
     private String conversationId;
     
-    @TableField("sender_id")
-    private String senderId;
-    
-    @TableField("receiver_id")
-    private String receiverId;
+
     
     @TableField("content_type")
     private String contentType; // text, image, file, emoji, voice, video
-    
-    @TableField("content")
-    private String content;
+
     
     @TableField("file_url")
     private String fileUrl;
@@ -35,6 +38,8 @@ public class Message {
     
     @TableField("timestamp")
     private Date timestamp;
+
+
     
     // 添加索引注解以提高查询性能
     @TableField(exist = false)
