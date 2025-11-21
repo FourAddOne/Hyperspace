@@ -16,6 +16,6 @@ public class MessageDTO {
 
     //todo  在MessageConstant
     private Integer to_target_type;
-    private Integer to_target_id;
+
 
 }

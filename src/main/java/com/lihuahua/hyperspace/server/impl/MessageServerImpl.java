@@ -11,6 +11,7 @@ import com.lihuahua.hyperspace.models.entity.User;
 import com.lihuahua.hyperspace.server.MessageServer;
 import com.lihuahua.hyperspace.utils.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -50,7 +51,20 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
     }
-    
+
+    @Override
+    public boolean sendGroupMessage(MessageDTO messageDTO) {
+        Message message = new Message();
+        BeanUtils.copyProperties(messageDTO, message);
+        message.setMessageId(SnowflakeIdUtil.nextId());
+        message.setContentType("text");
+        message.setStatus("sent");
+        message.setTimestamp(new Date());
+        messageMapper.insert(message);
+        return true;
+
+    }
+
     @Override
     public boolean sendMessage(MessageDTO messageDTO) {
         try {

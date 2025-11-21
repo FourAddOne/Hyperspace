@@ -1,5 +1,6 @@
 package com.lihuahua.hyperspace.controller.user;
 
+import com.lihuahua.hyperspace.constant.MessageConstant;
 import com.lihuahua.hyperspace.models.dto.MessageDTO;
 import com.lihuahua.hyperspace.models.vo.ResVO;
 import com.lihuahua.hyperspace.server.MessageServer;
@@ -18,15 +19,35 @@ public class MessageController {
     
     // 发送消息
     @PostMapping("/send")
-    public ResVO<?> sendMessage(@RequestBody MessageDTO messageDTO,
-                               @RequestAttribute("userId") String userId) {
-        try {
-            messageDTO.setSenderId(userId);
-            messageServer.sendMessage(messageDTO);
-            return ResVO.success("消息发送成功");
-        } catch (Exception e) {
-            return ResVO.fail(e.getMessage());
+    public ResVO<?> sendMessage(@RequestBody MessageDTO messageDTO) {
+        //私聊
+        if (messageDTO.getTo_target_type()== MessageConstant.TOUSER){
+            try {
+                messageDTO.setSenderId(messageDTO.getSenderId());
+                messageServer.sendMessage(messageDTO);
+                return ResVO.success("消息发送成功");
+            } catch (Exception e) {
+                return ResVO.fail(e.getMessage());
+            }
         }
+        //群聊
+        else if (messageDTO.getTo_target_type()== MessageConstant.TOGROUP){
+            try {
+                messageDTO.setSenderId(messageDTO.getSenderId());
+                messageServer.sendGroupMessage(messageDTO);
+                return ResVO.success("消息发送成功");
+            } catch (Exception e) {
+                return ResVO.fail(e.getMessage());
+            }
+        }  else {
+            return ResVO.fail("消息发送失败");
+        }
+
+
+
+
+
+
     }
     
     // 获取聊天历史记录

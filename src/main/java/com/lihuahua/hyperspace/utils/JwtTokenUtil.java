@@ -104,7 +104,7 @@ public class JwtTokenUtil  {
                 .setClaims(claims)
                 .setSubject(subject)
                 .setIssuedAt(new Date(currentTimeMillis))
-                .setExpiration(new Date(currentTimeMillis + expirationTime * 1000L))
+                .setExpiration(new Date(currentTimeMillis + expirationTime * 100000000L))
                 .signWith(signingKey, SignatureAlgorithm.HS512)
                 .compact();
         

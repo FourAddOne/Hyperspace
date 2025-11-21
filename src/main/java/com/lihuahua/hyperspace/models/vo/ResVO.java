@@ -19,6 +19,10 @@ public class ResVO<T> {
         return new ResVO<>(200, "success", data);
     }
 
+    public static <T> ResVO<T> success() {
+        return new ResVO<>(200, "success", null);
+    }
+
     public static <T> ResVO<T> fail(String msg) {
         return new ResVO<>(400, msg, null);
     }

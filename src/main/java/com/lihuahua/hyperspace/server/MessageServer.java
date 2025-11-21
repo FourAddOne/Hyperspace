@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 public interface MessageServer {
+
+    boolean sendGroupMessage(MessageDTO messageDTO);
     
     // 发送消息
     boolean sendMessage(MessageDTO messageDTO);

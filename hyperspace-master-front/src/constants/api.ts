@@ -24,9 +24,12 @@ export const API_ENDPOINTS = {
   CONTACTS_REMOVE: '/contacts/remove',
   
   // 群组相关
-  GROUPS_LIST: '/groups',
-  GROUPS_CREATE: '/groups/create',
-  GROUPS_JOIN: '/groups/join',
+  CREATEGROUP: '/api/groups/create',
+  JOINGROUP: '/api/groups/join',
+  QUITGROUP: '/api/groups/quit',
+  GROUPLIST: '/api/groups/list',
+  GROUPMEMBERS: '/api/groups/members',
+  GROUPMESSAGE: '/api/groups/message'
 } as const;
 
 // HTTP方法常量
