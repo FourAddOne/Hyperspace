@@ -22,11 +22,8 @@ public class Friend {
     @TableField("block_status")
     private String blockStatus; // NONE, USER_ONE_BLOCKED, USER_SEC_BLOCKED, BOTH_BLOCKED
     
-    @TableField("user_remark")
-    private String userRemark;
-    
-    @TableField("friend_remark")
-    private String friendRemark;
+    @TableField("remark")
+    private String remark;
     
     @TableField("created_at")
     private Long createdAt;

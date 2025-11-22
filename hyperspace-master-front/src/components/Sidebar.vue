@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ChatRound, User, Setting, SwitchButton } from '@element-plus/icons-vue'
-import { getUserInfo, getFullAvatarUrl } from '../utils/user'
+import { getUserInfo } from '../utils/user'
 import { removeToken } from '../utils/auth'
 import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useUserStore } from '../stores/userStore'
@@ -102,7 +102,23 @@ onMounted(() => {
 
 const userAvatar = computed(() => {
   const avatarUrl = userStore.getUserInfo?.avatarUrl;
-  return getFullAvatarUrl(avatarUrl) || '/src/assets/logo.svg';
+  // 确保avatarUrl是字符串类型
+  if (typeof avatarUrl !== 'string') {
+    return '/src/assets/logo.svg';
+  }
+  
+  // 如果avatarUrl是相对路径，需要拼接OSS域名
+  if (avatarUrl && !avatarUrl.startsWith('http')) {
+    // 拼接OSS域名前缀
+    return `https://fourandone-hyperspace.oss-cn-hangzhou.aliyuncs.com/${avatarUrl}`;
+  }
+  
+  // 如果avatarUrl是OSS路径，直接返回
+  if (avatarUrl && (avatarUrl.includes('oss') || avatarUrl.includes('aliyuncs.com'))) {
+    return avatarUrl;
+  }
+  
+  return avatarUrl || '/src/assets/logo.svg';
 })
 const username = computed(() => userStore.getUserName || '未知用户')
 const userStatus = computed(() => userStore.getUserInfo?.status || '在线')

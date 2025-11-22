@@ -394,7 +394,7 @@ watch(() => route.path, (newPath) => {
         // 创建一个临时会话对象
         const tempConversation = {
           id: friend.userId,
-          name: friend.userName,
+          name: friend.remark || friend.userName,
           avatar: getFullAvatarUrl(friend.avatarUrl) || '/src/assets/logo.svg',
           lastMessage: '',
           time: '',
@@ -419,7 +419,7 @@ const loadConversations = async () => {
     const response = await apiClient.get('/api/friends/list')
     conversations.value = response.data.map((friend: any) => ({
       id: friend.userId,
-      name: friend.userName,
+      name: friend.remark || friend.userName,
       avatar: getFullAvatarUrl(friend.avatarUrl) || '/src/assets/logo.svg',
       lastMessage: '',
       time: '',
@@ -557,7 +557,7 @@ onActivated(() => {
       // 创建一个临时会话对象
       const tempConversation = {
         id: friend.userId,
-        name: friend.userName,
+        name: friend.remark || friend.userName,
         avatar: getFullAvatarUrl(friend.avatarUrl) || '/src/assets/logo.svg',
         lastMessage: '',
         time: '',

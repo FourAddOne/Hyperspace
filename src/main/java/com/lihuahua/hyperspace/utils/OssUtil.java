@@ -2,9 +2,7 @@ package com.lihuahua.hyperspace.utils;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSException;
-import com.aliyun.oss.model.DeleteObjectsRequest;
-import com.aliyun.oss.model.GeneratePresignedUrlRequest;
-import com.aliyun.oss.model.PutObjectRequest;
+import com.aliyun.oss.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -21,17 +19,8 @@ public class OssUtil {
     @Autowired
     private OSS ossClient;
 
-    @Value("${aliyun.oss.bucketName}")
-    private String bucketName;
-
-    @Value("${aliyun.oss.endpoint}")
-    private String endpoint;
-
-    @Value("${aliyun.oss.accessKeyId}")
-    private String accessKeyId;
-
-    @Value("${aliyun.oss.accessKeySecret}")
-    private String accessKeySecret;
+    @Autowired
+    private OssProperties ossProperties;
 
     /**
      * 上传文件到OSS
@@ -67,7 +56,10 @@ public class OssUtil {
         String uniqueFilename = folder + UUID.randomUUID().toString() + fileExtension;
 
         // 上传文件到OSS
-        PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, uniqueFilename, file.getInputStream());
+        // 使用ObjectMetadata设置ACL权限
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setObjectAcl(CannedAccessControlList.PublicRead);
+        PutObjectRequest putObjectRequest = new PutObjectRequest(ossProperties.getBucketName(), uniqueFilename, file.getInputStream(), metadata);
         ossClient.putObject(putObjectRequest);
 
         // 返回文件路径
@@ -85,7 +77,7 @@ public class OssUtil {
         Date expiration  = new Date(System.currentTimeMillis() + expireSeconds * 1000);
 
         // 使用更直接的方式生成预签名URL
-        URL signedUrl = ossClient.generatePresignedUrl(bucketName, filePath, expiration);
+        URL signedUrl = ossClient.generatePresignedUrl(ossProperties.getBucketName(), filePath, expiration);
 
         // 将URL转换为字符串并返回
         return signedUrl.toString();
@@ -98,8 +90,9 @@ public class OssUtil {
      */
     public String generatePublicUrl(String filePath) {
         // 构造公开访问的URL
-        return "https://" + bucketName + "." + endpoint + "/" + filePath;
+        return ossProperties.getOssDomainPrefix() + filePath;
     }
+    
     /**
      * 从OSS中删除文件
      * @param filePath 文件在OSS中的路径或公开URL
@@ -111,7 +104,7 @@ public class OssUtil {
             String objectName = filePath;
             if (filePath.startsWith("http")) {
                 // 提取路径部分，例如从 https://bucket.endpoint/avatars/filename 提取 avatars/filename
-                String prefix = "https://" + bucketName + "." + endpoint + "/";
+                String prefix = ossProperties.getOssDomainPrefix();
                 if (filePath.startsWith(prefix)) {
                     objectName = filePath.substring(prefix.length());
                 } else {
@@ -128,7 +121,7 @@ public class OssUtil {
             }
             
             // 删除OSS中的文件
-            ossClient.deleteObject(bucketName, objectName);
+            ossClient.deleteObject(ossProperties.getBucketName(), objectName);
             return true;
         } catch (OSSException oe) {
             System.err.println("OSS错误码: " + oe.getErrorCode());
@@ -152,7 +145,7 @@ public class OssUtil {
         try {
             if (fileUrl.startsWith("http")) {
                 // 处理公开URL格式，例如 https://bucket.endpoint/folder/filename
-                String prefix = "https://" + bucketName + "." + endpoint + "/";
+                String prefix = ossProperties.getOssDomainPrefix();
                 if (fileUrl.startsWith(prefix)) {
                     return fileUrl.substring(prefix.length());
                 } else {
@@ -169,5 +162,24 @@ public class OssUtil {
             System.err.println("提取对象名称时出错: " + e.getMessage());
             return fileUrl; // 出错时返回原始URL
         }
+    }
+    
+    /**
+     * 将相对路径转换为完整URL
+     * @param relativePath 相对路径，如avatars/xxx.png
+     * @return 完整的可访问URL
+     */
+    public String convertToFullUrl(String relativePath) {
+        if (relativePath == null || relativePath.isEmpty()) {
+            return relativePath;
+        }
+        
+        // 如果已经是完整URL，直接返回
+        if (relativePath.startsWith("http")) {
+            return relativePath;
+        }
+        
+        // 拼接完整URL
+        return ossProperties.getOssDomainPrefix() + relativePath;
     }
 }

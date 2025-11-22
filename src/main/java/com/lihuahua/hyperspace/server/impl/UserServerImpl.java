@@ -11,6 +11,7 @@ import com.lihuahua.hyperspace.server.UserServer;
 import com.lihuahua.hyperspace.utils.IdUtil;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
 import com.lihuahua.hyperspace.utils.LocalFileUtil;
+import com.lihuahua.hyperspace.utils.OssProperties;
 import com.lihuahua.hyperspace.utils.OssUtil;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
@@ -30,6 +31,12 @@ public class UserServerImpl implements UserServer {
     
     @Resource
     private LocalFileUtil localFileUtil;
+    
+    @Resource
+    private OssUtil ossUtil;
+    
+    @Resource
+    private OssProperties ossProperties;
     
     @Override
     public UserLoginVO login(Map<String, String> credential) {
@@ -156,7 +163,7 @@ public class UserServerImpl implements UserServer {
     public UserLoginVO getUserInfo(String userId) {
         User user = userMapper.selectById(userId);
         if (user != null) {
-            return UserLoginVO.builder()
+            UserLoginVO userLoginVO = UserLoginVO.builder()
                     .userId(user.getUserId())
                     .userName(user.getUserName())
                     .email(user.getEmail())
@@ -164,13 +171,19 @@ public class UserServerImpl implements UserServer {
                     .Ip(user.getLoginIp())
                     .loginStatus(user.getLoginStatus()) // 添加用户在线状态
                     .build();
+            
+            // 如果头像URL是相对路径，转换为完整URL
+            if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
+                userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
+            }
+            
+            return userLoginVO;
         }
         return null;
     }
     
     @Override
     public Boolean updateAvatar(String userId, String newAvatarUrl) {
-        OssUtil ossUtil = new OssUtil();
         User user = userMapper.selectById(userId);
         if (user != null) {
             // 删除旧头像文件（如果存在且不是默认头像）
@@ -192,13 +205,29 @@ public class UserServerImpl implements UserServer {
                             System.out.println("删除用户 " + userId + " 的旧OSS头像失败: " + oldAvatarUrl);
                         }
                     }
+                    // 如果是相对路径，说明是OSS文件
+                    else if (!oldAvatarUrl.startsWith("http")) {
+                        // 实际删除OSS文件
+                        boolean deleted = ossUtil.deleteFileFromOSS(oldAvatarUrl);
+                        if (deleted) {
+                            System.out.println("已删除用户 " + userId + " 的旧OSS头像: " + oldAvatarUrl);
+                        } else {
+                            System.out.println("删除用户 " + userId + " 的旧OSS头像失败: " + oldAvatarUrl);
+                        }
+                    }
                 } catch (Exception e) {
                     System.out.println("删除用户 " + userId + " 的旧头像失败: " + oldAvatarUrl + ", 错误: " + e.getMessage());
                 }
             }
             
+            // 如果新头像URL是完整URL，提取相对路径存储到数据库
+            String avatarPathToSave = newAvatarUrl;
+            if (newAvatarUrl != null && newAvatarUrl.startsWith("http") && newAvatarUrl.contains(ossProperties.getBucketName())) {
+                avatarPathToSave = ossUtil.extractObjectNameFromUrl(newAvatarUrl);
+            }
+            
             // 更新用户头像URL
-            user.setAvatarUrl(newAvatarUrl);
+            user.setAvatarUrl(avatarPathToSave);
             userMapper.updateById(user);
             return true;
         }
@@ -214,6 +243,12 @@ public class UserServerImpl implements UserServer {
         if (userSettings != null) {
             UserSettingsVO userSettingsVO = new UserSettingsVO();
             BeanUtils.copyProperties(userSettings, userSettingsVO);
+            
+            // 如果背景图片URL是相对路径，转换为完整URL
+            if (userSettingsVO.getBackgroundImage() != null && !userSettingsVO.getBackgroundImage().startsWith("http")) {
+                userSettingsVO.setBackgroundImage(ossProperties.getOssDomainPrefix() + userSettingsVO.getBackgroundImage());
+            }
+            
             return userSettingsVO;
         }
         
@@ -229,13 +264,17 @@ public class UserServerImpl implements UserServer {
     
     @Override
     public Boolean saveUserSettings(UserSettingsVO userSettingsVO) {
-        OssUtil ossUtil =new OssUtil();
         QueryWrapper<UserSettings> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userSettingsVO.getUserId());
         UserSettings existingSettings = userSettingsMapper.selectOne(wrapper);
         
         UserSettings userSettings = new UserSettings();
         BeanUtils.copyProperties(userSettingsVO, userSettings);
+        
+        // 如果背景图片URL是完整URL，提取相对路径存储到数据库
+        if (userSettings.getBackgroundImage() != null && userSettings.getBackgroundImage().startsWith("http") && userSettings.getBackgroundImage().contains(ossProperties.getBucketName())) {
+            userSettings.setBackgroundImage(ossUtil.extractObjectNameFromUrl(userSettings.getBackgroundImage()));
+        }
         
         // 添加个人签名长度限制
         if (userSettingsVO.getPersonalSignature() != null && userSettingsVO.getPersonalSignature().length() > 200) {
@@ -266,6 +305,16 @@ public class UserServerImpl implements UserServer {
                             System.out.println("删除用户的旧OSS背景图片失败: " + oldBackgroundImage);
                         }
                     }
+                    // 如果是相对路径，说明是OSS文件
+                    else if (!oldBackgroundImage.startsWith("http")) {
+                        // 实际删除OSS文件
+                        boolean deleted = ossUtil.deleteFileFromOSS(oldBackgroundImage);
+                        if (deleted) {
+                            System.out.println("已删除用户的旧OSS背景图片: " + oldBackgroundImage);
+                        } else {
+                            System.out.println("删除用户的旧OSS背景图片失败: " + oldBackgroundImage);
+                        }
+                    }
                 } catch (Exception e) {
                     System.out.println("删除用户的旧背景图片失败: " + existingSettings.getBackgroundImage() + ", 错误: " + e.getMessage());
                 }
@@ -281,7 +330,7 @@ public class UserServerImpl implements UserServer {
     @Override
     public List<UserLoginVO> searchUsers(String keyword) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.like("user_name", keyword).or().like("email", keyword);
+        queryWrapper.and(wrapper -> wrapper.like("user_id", keyword).or().like("user_name", keyword));
         queryWrapper.last("LIMIT 20"); // 限制返回结果数量
         
         List<User> users = userMapper.selectList(queryWrapper);
@@ -295,6 +344,12 @@ public class UserServerImpl implements UserServer {
                     .avatarUrl(user.getAvatarUrl())
                     .Ip(user.getLoginIp())
                     .build();
+            
+            // 如果头像URL是相对路径，转换为完整URL
+            if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
+                userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
+            }
+            
             userLoginVOs.add(userLoginVO);
         }
         
@@ -304,7 +359,7 @@ public class UserServerImpl implements UserServer {
     @Override
     public List<UserLoginVO> searchUsers(String keyword, String excludeUserId) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.like("user_name", keyword).or().like("email", keyword);
+        queryWrapper.and(wrapper -> wrapper.like("user_id", keyword).or().like("user_name", keyword));
         // 排除指定用户
         if (excludeUserId != null && !excludeUserId.isEmpty()) {
             queryWrapper.ne("user_id", excludeUserId);
@@ -322,6 +377,12 @@ public class UserServerImpl implements UserServer {
                     .avatarUrl(user.getAvatarUrl())
                     .Ip(user.getLoginIp())
                     .build();
+            
+            // 如果头像URL是相对路径，转换为完整URL
+            if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
+                userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
+            }
+            
             userLoginVOs.add(userLoginVO);
         }
         
