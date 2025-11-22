@@ -1,7 +1,7 @@
 // 用户信息管理工具类
 
 /**
- * 用户信息接口，基于后端UserLoginVO类
+ * 用户基本信息接口，基于后端UserBasicVO类
  */
 export interface UserInfo {
   userId: string;

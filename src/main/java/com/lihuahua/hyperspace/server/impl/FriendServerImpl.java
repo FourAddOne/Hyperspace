@@ -7,7 +7,8 @@ import com.lihuahua.hyperspace.mapper.UserSettingsMapper;
 import com.lihuahua.hyperspace.models.entity.Friend;
 import com.lihuahua.hyperspace.models.entity.User;
 import com.lihuahua.hyperspace.models.entity.UserSettings;
-import com.lihuahua.hyperspace.models.vo.UserLoginVO;
+import com.lihuahua.hyperspace.models.vo.FriendVO;
+import com.lihuahua.hyperspace.models.vo.UserBasicVO;
 import com.lihuahua.hyperspace.server.FriendServer;
 import com.lihuahua.hyperspace.utils.OssProperties;
 import jakarta.annotation.Resource;
@@ -42,6 +43,14 @@ public class FriendServerImpl implements FriendServer {
         if (friendMapper.hasPendingRequest(userId, friendId)) {
             throw new RuntimeException("好友请求已发送，请等待对方接受");
         }
+        
+        // 检查是否被对方屏蔽
+        QueryWrapper<Friend> blockWrapper = new QueryWrapper<>();
+        blockWrapper.eq("user_id", friendId).eq("friend_id", userId).eq("status", "BLOCKED");
+        if (friendMapper.selectCount(blockWrapper) > 0) {
+            throw new RuntimeException("无法发送好友请求");
+        }
+        
         // 创建好友请求记录 (用户向好友发送请求)
         Friend friend = new Friend();
         friend.setUserId(userId);
@@ -103,19 +112,85 @@ public class FriendServerImpl implements FriendServer {
     }
     
     @Override
-    public List<UserLoginVO> getFriendList(String userId) {
+    public boolean blockFriendRequest(String userId, String requesterId) {
+        // 先拒绝好友请求
+        rejectFriendRequest(userId, requesterId);
+        
+        // 然后创建一个屏蔽记录，防止该用户再次发送请求
+        Friend blockRecord = new Friend();
+        blockRecord.setUserId(userId); // 当前用户屏蔽了requesterId
+        blockRecord.setFriendId(requesterId);
+        blockRecord.setStatus("BLOCKED");
+        blockRecord.setBlockStatus("BLOCKED"); // 简化屏蔽状态
+        blockRecord.setRemark("");
+        long currentTime = System.currentTimeMillis();
+        blockRecord.setCreatedAt(currentTime);
+        blockRecord.setUpdatedAt(currentTime);
+        friendMapper.insert(blockRecord);
+        
+        return true;
+    }
+    
+    @Override
+    public List<FriendVO> getFriendList(String userId) {
         // 查询用户的所有好友关系 (用户作为发起方)
         QueryWrapper<Friend> wrapper1 = new QueryWrapper<>();
         wrapper1.eq("user_id", userId).eq("status", "ACCEPTED");
         List<Friend> friendsAsUser = friendMapper.selectList(wrapper1);
 
-        List<UserLoginVO> friendList = new ArrayList<>();
+        List<FriendVO> friendList = new ArrayList<>();
         
         // 处理用户的好友关系
         for (Friend friend : friendsAsUser) {
             User user = userMapper.selectById(friend.getFriendId());
             if (user != null) {
-                UserLoginVO userLoginVO = UserLoginVO.builder()
+                FriendVO friendVO = FriendVO.builder()
+                        .userId(user.getUserId())
+                        .userName(user.getUserName())
+                        .email(user.getEmail())
+                        .avatarUrl(user.getAvatarUrl())
+                        .Ip(user.getLoginIp())
+                        .loginStatus(user.getLoginStatus())
+                        .remark(friend.getRemark())
+                        .createdAt(friend.getCreatedAt())
+                        .personalSignature("")
+                        .build();
+                
+                // 如果头像URL是相对路径，转换为完整URL
+                if (friendVO.getAvatarUrl() != null && !friendVO.getAvatarUrl().startsWith("http")) {
+                    friendVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + friendVO.getAvatarUrl());
+                }
+                
+                // 获取好友的个人签名
+                QueryWrapper<UserSettings> settingsWrapper = new QueryWrapper<>();
+                settingsWrapper.eq("user_id", friend.getFriendId());
+                UserSettings userSettings = userSettingsMapper.selectOne(settingsWrapper);
+                
+                if (userSettings != null) {
+                    friendVO.setPersonalSignature(userSettings.getPersonalSignature());
+                }
+                
+                friendList.add(friendVO);
+            }
+        }
+        
+        return friendList;
+    }
+    
+    @Override
+    public List<UserBasicVO> getFriendRequests(String userId) {
+        // 查询发送给用户的所有待处理好友请求
+        QueryWrapper<Friend> wrapper = new QueryWrapper<>();
+        wrapper.eq("friend_id", userId).eq("status", "PENDING");
+        List<Friend> requests = friendMapper.selectList(wrapper);
+        
+        List<UserBasicVO> requestList = new ArrayList<>();
+        
+        // 处理好友请求
+        for (Friend request : requests) {
+            User user = userMapper.selectById(request.getUserId());
+            if (user != null) {
+                UserBasicVO userBasicVO = UserBasicVO.builder()
                         .userId(user.getUserId())
                         .userName(user.getUserName())
                         .email(user.getEmail())
@@ -125,56 +200,11 @@ public class FriendServerImpl implements FriendServer {
                         .build();
                 
                 // 如果头像URL是相对路径，转换为完整URL
-                if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
-                    userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
+                if (userBasicVO.getAvatarUrl() != null && !userBasicVO.getAvatarUrl().startsWith("http")) {
+                    userBasicVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userBasicVO.getAvatarUrl());
                 }
                 
-                // 获取好友的个人签名
-                QueryWrapper<UserSettings> settingsWrapper = new QueryWrapper<>();
-                settingsWrapper.eq("user_id", friend.getFriendId());
-                UserSettings userSettings = userSettingsMapper.selectOne(settingsWrapper);
-                
-                if (userSettings != null) {
-                    userLoginVO.setPersonalSignature(userSettings.getPersonalSignature());
-                }
-                
-                // 添加备注信息到UserLoginVO中
-                userLoginVO.setRemark(friend.getRemark());
-                
-                friendList.add(userLoginVO);
-            }
-        }
-        
-        return friendList;
-    }
-    
-    @Override
-    public List<UserLoginVO> getFriendRequests(String userId) {
-        // 查询发送给用户的所有待处理好友请求
-        QueryWrapper<Friend> wrapper = new QueryWrapper<>();
-        wrapper.eq("friend_id", userId).eq("status", "PENDING");
-        List<Friend> requests = friendMapper.selectList(wrapper);
-        
-        List<UserLoginVO> requestList = new ArrayList<>();
-        
-        // 处理好友请求
-        for (Friend request : requests) {
-            User user = userMapper.selectById(request.getUserId());
-            if (user != null) {
-                UserLoginVO userLoginVO = UserLoginVO.builder()
-                        .userId(user.getUserId())
-                        .userName(user.getUserName())
-                        .email(user.getEmail())
-                        .avatarUrl(user.getAvatarUrl())
-                        .Ip(user.getLoginIp())
-                        .build();
-                
-                // 如果头像URL是相对路径，转换为完整URL
-                if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
-                    userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
-                }
-                
-                requestList.add(userLoginVO);
+                requestList.add(userBasicVO);
             }
         }
         
@@ -219,32 +249,33 @@ public class FriendServerImpl implements FriendServer {
     }
     
     @Override
-    public List<UserLoginVO> getSentFriendRequests(String userId) {
+    public List<UserBasicVO> getSentFriendRequests(String userId) {
         // 查询用户发出的所有待处理好友请求
         QueryWrapper<Friend> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userId).eq("status", "PENDING");
         List<Friend> requests = friendMapper.selectList(wrapper);
         
-        List<UserLoginVO> requestList = new ArrayList<>();
+        List<UserBasicVO> requestList = new ArrayList<>();
         
         // 处理好友请求
         for (Friend request : requests) {
             User user = userMapper.selectById(request.getFriendId());
             if (user != null) {
-                UserLoginVO userLoginVO = UserLoginVO.builder()
+                UserBasicVO userBasicVO = UserBasicVO.builder()
                         .userId(user.getUserId())
                         .userName(user.getUserName())
                         .email(user.getEmail())
                         .avatarUrl(user.getAvatarUrl())
                         .Ip(user.getLoginIp())
+                        .loginStatus(user.getLoginStatus())
                         .build();
                 
                 // 如果头像URL是相对路径，转换为完整URL
-                if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
-                    userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
+                if (userBasicVO.getAvatarUrl() != null && !userBasicVO.getAvatarUrl().startsWith("http")) {
+                    userBasicVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userBasicVO.getAvatarUrl());
                 }
                 
-                requestList.add(userLoginVO);
+                requestList.add(userBasicVO);
             }
         }
         

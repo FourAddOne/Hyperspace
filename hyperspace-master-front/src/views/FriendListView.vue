@@ -25,7 +25,7 @@
         <el-avatar :src="getFullAvatarUrl(request.avatarUrl)" :size="40" />
         <div class="request-info">
           <div class="username">{{ request.userName }}</div>
-          <div class="request-time">请求时间</div>
+          <div class="request-time">{{ formatRequestTime(request.createdAt) }}</div>
         </div>
         <div class="request-actions">
           <el-button 
@@ -41,6 +41,13 @@
             @click="rejectFriendRequest(request.userId)"
           >
             拒绝
+          </el-button>
+          <el-button 
+            type="warning" 
+            size="small" 
+            @click="blockFriendRequest(request.userId)"
+          >
+            屏蔽
           </el-button>
         </div>
       </div>
@@ -292,6 +299,19 @@ const rejectFriendRequest = async (requesterId: string) => {
   }
 }
 
+// 屏蔽用户（拒绝并屏蔽好友请求）
+const blockFriendRequest = async (requesterId: string) => {
+  try {
+    await apiClient.post('/api/friends/block', null, {
+      params: { requesterId }
+    })
+    ElMessage.success('已屏蔽该用户')
+    await loadFriendRequests()
+  } catch (error: any) {
+    ElMessage.error('屏蔽用户失败: ' + error.message)
+  }
+}
+
 // 开始聊天
 const startChat = (friend: any) => {
   // 发送事件给父组件或路由跳转到聊天页面
@@ -390,10 +410,43 @@ const handleGlobalUserStatusChange = (event: Event) => {
   handleUserStatusChange(customEvent.detail);
 };
 
+// 格式化请求时间
+const formatRequestTime = (timestamp: number) => {
+  if (!timestamp) return '';
+  
+  const date = new Date(timestamp);
+  const now = new Date();
+  
+  // 如果是今天，只显示时间
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // 如果是今年，显示月日和时间
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString('zh-CN', { 
+      month: 'numeric', 
+      day: 'numeric',
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+  
+  // 其他情况显示完整日期和时间
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 // 监听搜索关键词变化
 watch(searchKeyword, () => {
   searchFriends();
 });
+
 </script>
 
 <style scoped>
@@ -486,6 +539,12 @@ watch(searchKeyword, () => {
   color: #888;
 }
 
+/* 暗色模式下改善请求时间的可见性 */
+.dark-mode .request-time,
+.dark-mode .request-status {
+  color: #aaa;
+}
+
 .friend-requests h3,
 .sent-friend-requests h3,
 .friends-list h3 {
@@ -546,7 +605,10 @@ watch(searchKeyword, () => {
 }
 
 .request-time,
-
+.request-status {
+  font-size: 12px;
+  color: #888;
+}
 
 .request-actions {
   display: flex;

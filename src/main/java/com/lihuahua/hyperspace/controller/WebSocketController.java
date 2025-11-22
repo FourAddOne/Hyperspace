@@ -2,7 +2,7 @@ package com.lihuahua.hyperspace.controller;
 
 import com.lihuahua.hyperspace.models.dto.MessageDTO;
 import com.lihuahua.hyperspace.models.entity.Message;
-import com.lihuahua.hyperspace.models.vo.UserLoginVO;
+import com.lihuahua.hyperspace.models.vo.UserProfileVO;
 import com.lihuahua.hyperspace.server.MessageServer;
 import com.lihuahua.hyperspace.server.UserServer;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,7 +94,7 @@ public class WebSocketController {
             }
             
             String userId = principal.getName();
-            UserLoginVO userInfo = userServer.getUserInfo(userId);
+            UserProfileVO userInfo = userServer.getUserInfo(userId);
             
             if (userInfo != null) {
                 // 发送用户信息给当前用户

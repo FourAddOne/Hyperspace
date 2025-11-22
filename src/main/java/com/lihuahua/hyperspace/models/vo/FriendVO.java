@@ -10,8 +10,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "用户登录返回信息")
-public class UserLoginVO {
+@Schema(description = "好友信息")
+public class FriendVO {
 
     @Schema(description = "用户ID")
     private String userId;
@@ -28,18 +28,15 @@ public class UserLoginVO {
     @Schema(description = "登录IP")
     private String Ip;
 
-    @Schema(description = "访问令牌")
-    private String accessToken;
-
-    @Schema(description = "刷新令牌")
-    private String refreshToken;
-    
     @Schema(description = "个人签名")
     private String personalSignature;
-    
+
     @Schema(description = "登录状态")
     private Boolean loginStatus;
-    
+
     @Schema(description = "好友备注")
     private String remark;
+
+    @Schema(description = "创建时间")
+    private Long createdAt;
 }

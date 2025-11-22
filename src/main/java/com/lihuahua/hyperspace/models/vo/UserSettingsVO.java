@@ -38,10 +38,4 @@ public class UserSettingsVO {
     
     @Schema(description = "年龄")
     private Integer age;
-    
-    @Schema(description = "创建时间")
-    private Date createdAt;
-    
-    @Schema(description = "更新时间")
-    private Date updatedAt;
 }
