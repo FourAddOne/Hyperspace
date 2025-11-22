@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 
 @Slf4j
 @RestController
@@ -62,8 +64,9 @@ public class GroupController {
     @Operation(summary = "群组列表")
     @PostMapping("/list")
     public ResVO groupList(@RequestBody GroupDTO groupDTO) {
-        groupServer.groupList(groupDTO);
-        return ResVO.success();
+        log.info("群组列表{}", groupDTO);
+        List<GroupDTO> groupDTOS = groupServer.groupList(groupDTO);
+        return ResVO.success(groupDTOS);
     }
 
 

@@ -15,7 +15,7 @@ public class MessageDTO {
     private boolean showDate; // 是否显示日期
 
     //todo  在MessageConstant
-    private Integer to_target_type;
+    private Integer toTargetType;
 
 
 }

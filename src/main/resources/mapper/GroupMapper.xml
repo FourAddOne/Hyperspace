@@ -39,10 +39,11 @@
         WHERE gu.group_id = #{groupId}
     </select>
     <select id="groupListbyUserId" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
-        SELECT g.group_name,g.group_id
-        FROM `group_member`
-        where user_id=#{userId}
-
+    SELECT g.group_name, g.group_id
+    FROM `group` g
+    JOIN group_member gm ON g.group_id = gm.group_id
+    WHERE gm.user_id = #{userId}
     </select>
+
 
 </mapper>
