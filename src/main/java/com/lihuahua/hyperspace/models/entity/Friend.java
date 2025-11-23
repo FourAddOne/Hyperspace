@@ -10,11 +10,11 @@ public class Friend {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
     
-    @TableField("user_one")
-    private String userOne;
+    @TableField("user_id")
+    private String userId;
     
-    @TableField("user_sec")
-    private String userSec;
+    @TableField("friend_id")
+    private String friendId;
     
     @TableField("status")
     private String status; // PENDING, ACCEPTED, REJECTED, BLOCKED
@@ -22,11 +22,8 @@ public class Friend {
     @TableField("block_status")
     private String blockStatus; // NONE, USER_ONE_BLOCKED, USER_SEC_BLOCKED, BOTH_BLOCKED
     
-    @TableField("user_one_remark")
-    private String userOneRemark;
-    
-    @TableField("user_sec_remark")
-    private String userSecRemark;
+    @TableField("remark")
+    private String remark;
     
     @TableField("created_at")
     private Long createdAt;

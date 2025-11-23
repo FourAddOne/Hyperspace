@@ -1,7 +1,7 @@
 // 用户信息管理工具类
 
 /**
- * 用户信息接口，基于后端UserLoginVO类
+ * 用户基本信息接口，基于后端UserBasicVO类
  */
 export interface UserInfo {
   userId: string;
@@ -132,15 +132,21 @@ export const getFullAvatarUrl = (avatarUrl: string): string => {
     return '/src/assets/logo.svg';
   }
   
-  // 如果avatarUrl是相对路径，需要拼接后端服务器地址
-  if (avatarUrl && avatarUrl.startsWith('/uploads/')) {
-    // 通过API代理访问上传的文件
-    return '/api' + avatarUrl;
+  // 如果avatarUrl是相对路径，需要拼接OSS域名
+  if (avatarUrl && !avatarUrl.startsWith('http')) {
+    // 拼接OSS域名前缀
+    return `https://fourandone-hyperspace.oss-cn-hangzhou.aliyuncs.com/${avatarUrl}`;
   }
   
   // 如果avatarUrl是OSS路径，直接返回
   if (avatarUrl && (avatarUrl.includes('oss') || avatarUrl.includes('aliyuncs.com'))) {
     return avatarUrl;
+  }
+  
+  // 如果avatarUrl是相对路径，需要拼接后端服务器地址
+  if (avatarUrl && avatarUrl.startsWith('/uploads/')) {
+    // 通过API代理访问上传的文件
+    return '/api' + avatarUrl;
   }
   
   return avatarUrl || '/src/assets/logo.svg';

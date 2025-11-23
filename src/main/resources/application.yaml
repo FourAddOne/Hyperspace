@@ -6,14 +6,13 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://1.15.41.43:3306/hyperspace
     username: hyperspace
-    password: KFaRMeZJfrWpEA3i
+    password: ${DB_PASSWORD:KFaRMeZJfrWpEA3i}
 
-  data:
-    redis:
-      host: 124.221.15.13
-      port: 6379
-      database: 1
-      password: 998877
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:654321}
+    database: ${REDIS_DATABASE:1}
 
   servlet:
     multipart:
@@ -22,29 +21,26 @@ spring:
 
   web:
     resources:
-      static-locations: classpath:/static/,file:uploads/
+      static-locations: classpath:/static/
 
 server:
   port: 8080
 
 aliyun:
   oss:
-    endpoint: oss-cn-hangzhou.aliyuncs.com
-    accessKeyId: LTAI5tCvmabLdf2xQcN363tz
-    accessKeySecret: o2Q5xjQ7hcizJv5w2OMLlrohP4LdWZ
-    bucketName: lihuahua-hyperspace
+    endpoint: ${ALIYUN_OSS_ENDPOINT:oss-cn-hangzhou.aliyuncs.com}
+    accessKeyId: ${ALIYUN_OSS_ACCESS_KEY_ID:LTAI5tCvmabLdf2xQcN363tz}
+    accessKeySecret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:o2Q5xjQ7hcizJv5w2OMLlrohP4LdWZ}
+    bucketName: ${ALIYUN_OSS_BUCKET_NAME:fourandone-hyperspace}
 
 knife4j:
   enable: true
 
 jwt:
-  secret: "Hyp3rsp4c3_S3cr3t_K3y_F0r_JWT_T0k3n_Signing_With_HS512_Algorithm"
-  #secret: "GENERATE_SECURE_KEY"
-  expiration: 43200
-  long-expiration: 43200
+  secret: ${JWT_SECRET:Hyp3rsp4c3_S3cr3t_K3y_F0r_JWT_T0k3n_Signing_With_HS512_Algorithm}
+  expiration: ${JWT_EXPIRATION:43200}
+  long-expiration: ${JWT_LONG_EXPIRATION:43200}
 
 file:
   upload:
-    path: uploads
-    mode: local
-
+    mode: oss

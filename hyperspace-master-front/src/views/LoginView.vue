@@ -2,111 +2,114 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import apiClient, { API_ENDPOINTS } from '../services/api'
-import { saveToken } from '../utils/auth'
+import apiClient from '../services/api'
+import { saveToken, removeToken } from '../utils/auth'
 import { saveUserInfo } from '../utils/user'
 import { useUserStore } from '../stores/userStore'
-import { getUserIP } from '../utils/ip'
 
 const router = useRouter()
-const userStore = useUserStore()
+const loading = ref(false)
+const useUserId = ref(false) // 控制使用用户ID还是邮箱登录
 
-// 表单数据
-const form = ref({
+const loginForm = ref({
   userId: '',
   email: '',
-  password: ''
+  password: '',
+  ip: ''
 })
 
-// 登录方式：email 或 userId
-const loginMethod = ref('email')
+// 获取用户store
+const userStore = useUserStore()
 
-// 登录加载状态
-const loading = ref(false)
+onMounted(() => {
+  // 页面加载时清空可能存在的旧token
+  removeToken()
+  // 添加登录页面的CSS类
+  document.body.classList.add('login-page')
+})
 
-// IP地址（动态获取）
-const ip = ref('')
+onUnmounted(() => {
+  // 组件销毁时移除CSS类
+  document.body.classList.remove('login-page')
+})
 
-// 获取用户IP
-const fetchUserIP = async () => {
-  try {
-    const userIP = await getUserIP()
-    ip.value = userIP // 现在getUserIP在失败时返回'127.0.0.1'
-  } catch (error) {
-    console.error('获取IP失败:', error)
-    ip.value = '127.0.0.1' // 出错时使用默认值
-  }
+// 切换登录方式
+const toggleLoginMethod = () => {
+  useUserId.value = !useUserId.value
+  // 清空表单
+  loginForm.value.userId = ''
+  loginForm.value.email = ''
 }
 
-// 处理登录
 const handleLogin = async () => {
-  if (((loginMethod.value === 'email' && !form.value.email) || 
-       (loginMethod.value === 'userId' && !form.value.userId)) || 
-      !form.value.password) {
-    ElMessage.error('请填写完整信息')
+  if (useUserId.value && !loginForm.value.userId) {
+    ElMessage.error('请输入用户ID')
     return
   }
-
+  
+  if (!useUserId.value && !loginForm.value.email) {
+    ElMessage.error('请输入邮箱地址')
+    return
+  }
+  
+  if (!loginForm.value.password) {
+    ElMessage.error('请输入密码')
+    return
+  }
+  
   loading.value = true
   
   try {
-    const requestData: any = {
-      password: form.value.password,
-      ip: ip.value
+    // 获取客户端IP
+    try {
+      const ipResponse = await apiClient.get('https://httpbin.org/ip')
+      loginForm.value.ip = ipResponse.origin
+    } catch (ipError) {
+      console.error('获取IP失败:', ipError)
+      loginForm.value.ip = '127.0.0.1' // 默认IP
     }
     
-    if (loginMethod.value === 'email') {
-      requestData.email = form.value.email
+    // 准备登录数据
+    const loginData: any = {
+      password: loginForm.value.password,
+      ip: loginForm.value.ip
+    }
+    
+    // 根据登录方式添加对应的字段
+    if (useUserId.value) {
+      loginData.userId = loginForm.value.userId
     } else {
-      requestData.userId = form.value.userId
+      loginData.email = loginForm.value.email
     }
     
-    const loginResponse = await apiClient.post(API_ENDPOINTS.USER_LOGIN, requestData)
-    console.log('登录响应:', loginResponse); // 添加日志查看实际响应
-
-    // Check if response indicates an error
-    if (loginResponse.code !== 200) {
-      throw new Error(loginResponse.msg || '登录失败');
-    }
-
-    if (loginResponse) {
-      // 检查响应数据中是否包含accessToken
-      // 数据现在直接在loginResponse中，因为拦截器自动返回response.data
-      const userData = loginResponse.data || loginResponse;
-      if (!userData || !userData.accessToken) {
-        console.error('登录响应中缺少访问令牌:', loginResponse);
-        throw new Error('登录响应中缺少访问令牌');
-      }
+    console.log('登录请求数据:', loginData)
+    
+    // 执行登录
+    const response = await apiClient.post('/user/login', loginData)
+    
+    console.log('登录响应:', response)
+    
+    // 修复响应判断逻辑
+    if (response && response.code === 200 && response.data) {
+      // 保存token
+      const { accessToken, refreshToken } = response.data
+      saveToken(accessToken, refreshToken)
       
-      // 保存token到localStorage
-      saveToken(userData.accessToken)
-      
-      // 保存用户信息到store和localStorage
-      userStore.setUserInfo(userData)
-      
-      // 添加一个小延迟确保token被axios拦截器正确设置
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // 获取并应用用户的暗色模式设置
       try {
-        const settingsResponse = await apiClient.get(API_ENDPOINTS.USER_SETTINGS)
-        console.log('用户设置响应:', settingsResponse); // 添加调试日志
+        // 获取用户信息
+        const userResponse = await apiClient.get('/user/info')
+        console.log('用户信息响应:', userResponse)
+        if (userResponse && userResponse.code === 200) {
+          // 保存用户信息到localStorage
+          saveUserInfo(userResponse.data)
+          // 更新store中的用户信息
+          userStore.setUserInfo(userResponse.data)
+        }
         
-        if (settingsResponse && settingsResponse.data) {
-          // 保存用户设置到store
-          userStore.setUserSettings(settingsResponse.data)
-          
-          // 立即应用暗色模式到当前页面
-          if (settingsResponse.data.darkMode) {
-            document.body.classList.add('dark-mode')
-            // 保存到本地存储，以便其他页面使用
-            localStorage.setItem('userDarkMode', 'true')
-          } else {
-            document.body.classList.remove('dark-mode')
-            localStorage.setItem('userDarkMode', 'false')
-          }
-          
-          // 保存背景设置
+        // 获取用户设置
+        const settingsResponse = await apiClient.get('/user/settings')
+        console.log('用户设置响应:', settingsResponse)
+        if (settingsResponse && settingsResponse.code === 200) {
           // 处理背景图片URL
           let fullBackgroundImageUrl = settingsResponse.data.backgroundImage || '';
           if (fullBackgroundImageUrl && fullBackgroundImageUrl.startsWith('/uploads/')) {
@@ -115,17 +118,27 @@ const handleLogin = async () => {
           
           localStorage.setItem('userBackgroundImage', fullBackgroundImageUrl)
           localStorage.setItem('userBackgroundOpacity', settingsResponse.data.backgroundOpacity?.toString() || '100')
+          
+          // 更新store中的用户设置和背景状态
+          userStore.setUserSettings(settingsResponse.data)
+          userStore.setHasBackground(!!fullBackgroundImageUrl)
+          userStore.setDarkMode(settingsResponse.data.darkMode || false)
         } else {
           // 如果没有获取到设置，默认使用亮色模式
-          document.body.classList.remove('dark-mode')
-          localStorage.setItem('userDarkMode', 'false')
+          userStore.setDarkMode(false)
+          userStore.setHasBackground(false)
         }
       } catch (settingsError) {
         console.error('获取用户设置失败:', settingsError)
         // 如果获取设置失败，默认使用亮色模式
-        document.body.classList.remove('dark-mode')
-        localStorage.setItem('userDarkMode', 'false')
+        userStore.setDarkMode(false)
+        userStore.setHasBackground(false)
       }
+      
+      // 应用暗色模式设置
+      document.body.classList.toggle('dark-mode', userStore.getDarkMode)
+      // 移除登录页面背景
+      document.body.classList.remove('login-page')
       
       ElMessage.success('登录成功')
       
@@ -134,35 +147,32 @@ const handleLogin = async () => {
       
       // 跳转到聊天页面
       await router.push('/chat')
+    } else {
+      ElMessage.error(response?.msg || '登录响应异常')
     }
   } catch (error: any) {
     console.error('登录失败:', error)
-    ElMessage.error(error.message || '登录失败')
+    if (error.response && error.response.data && error.response.data.msg) {
+      ElMessage.error(error.response.data.msg)
+    } else {
+      ElMessage.error(error.message || '登录失败')
+    }
   } finally {
     loading.value = false
   }
 }
 
-// 前往注册页面
+// 跳转到注册页面
 const goToRegister = () => {
   router.push('/register')
 }
 
-// 切换登录方式
-const toggleLoginMethod = () => {
-  loginMethod.value = loginMethod.value === 'email' ? 'userId' : 'email'
-}
-
-// 组件挂载时获取用户IP
-onMounted(() => {
-  fetchUserIP()
-  // 添加login-page类以显示登录背景
-  document.body.classList.add('login-page')
-})
-
-// 在组件卸载时移除login-page类
-onUnmounted(() => {
-  document.body.classList.remove('login-page')
+// 监听路由变化，确保正确添加背景类
+router.afterEach((to, from) => {
+  // 如果进入登录页面，确保添加背景类
+  if (to.name === 'login') {
+    document.body.classList.add('login-page')
+  }
 })
 </script>
 
@@ -175,35 +185,35 @@ onUnmounted(() => {
       </div>
       
       <form @submit.prevent="handleLogin" class="login-form">
-        <div class="form-group">
-          <label v-if="loginMethod === 'email'" for="email">邮箱</label>
-          <label v-else for="userId">用户ID</label>
+        <div class="form-group" v-if="useUserId">
+          <label for="userId">用户ID</label>
           <input 
-            v-if="loginMethod === 'email'"
-            id="email"
-            v-model="form.email" 
-            type="email" 
-            placeholder="请输入邮箱地址" 
-            class="form-input"
-            :disabled="loading"
-          />
-          <input 
-            v-else
             id="userId"
-            v-model="form.userId" 
+            v-model="loginForm.userId" 
             type="text" 
             placeholder="请输入用户ID" 
             class="form-input"
             :disabled="loading"
           />
-
+        </div>
+        
+        <div class="form-group" v-else>
+          <label for="email">邮箱</label>
+          <input 
+            id="email"
+            v-model="loginForm.email" 
+            type="email" 
+            placeholder="请输入邮箱地址" 
+            class="form-input"
+            :disabled="loading"
+          />
         </div>
         
         <div class="form-group">
           <label for="password">密码</label>
           <input 
             id="password"
-            v-model="form.password" 
+            v-model="loginForm.password" 
             type="password" 
             placeholder="请输入密码" 
             class="form-input"
@@ -212,9 +222,11 @@ onUnmounted(() => {
         </div>
 
         <div class="toggle-login-method">
-          <span @click="toggleLoginMethod">使用{{ loginMethod === 'email' ? '用户ID' : '邮箱' }}登录</span>
+          <span @click="toggleLoginMethod">
+            {{ useUserId ? '使用邮箱登录' : '使用用户ID登录' }}
+          </span>
         </div>
-        
+
         <button 
           type="submit" 
           class="login-button" 
@@ -312,25 +324,6 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.toggle-login-method {
-  text-align: center;
-  margin-top: 8px;
-  margin-bottom: 16px;
-}
-
-.toggle-login-method span {
-  font-size: 14px;
-  color: #0084ff;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.toggle-login-method span:hover {
-  text-decoration: underline;
-  background-color: rgba(0, 132, 255, 0.1);
-}
-
 .login-button {
   width: 100%;
   padding: 14px;
@@ -378,6 +371,22 @@ onUnmounted(() => {
 .login-footer a:hover {
   color: #4568dc;
   text-decoration: underline;
+}
+
+.toggle-login-method {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.toggle-login-method span {
+  color: #0084ff;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.toggle-login-method span:hover {
+  color: #4568dc;
 }
 
 @keyframes fadeIn {
@@ -438,14 +447,6 @@ onUnmounted(() => {
   color: #aaa;
 }
 
-.dark-mode .toggle-login-method span {
-  color: #409eff;
-}
-
-.dark-mode .toggle-login-method span:hover {
-  background-color: rgba(64, 158, 255, 0.1);
-}
-
 .dark-mode .login-button {
   background: linear-gradient(120deg, #0066cc, #3a56c0);
   box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
@@ -468,6 +469,14 @@ onUnmounted(() => {
 }
 
 .dark-mode .login-footer a:hover {
+  color: #66b1ff;
+}
+
+.dark-mode .toggle-login-method span {
+  color: #409eff;
+}
+
+.dark-mode .toggle-login-method span:hover {
   color: #66b1ff;
 }
 </style>

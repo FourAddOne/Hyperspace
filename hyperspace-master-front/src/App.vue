@@ -1,23 +1,32 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
-import { onMounted } from 'vue'
 import { useUserStore } from './stores/userStore'
-import { getToken } from './utils/auth'
+import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-// 应用启动时检查用户登录状态
+const userStore = useUserStore()
+const router = useRouter()
+
+// 初始化用户状态
 onMounted(() => {
-  const userStore = useUserStore()
-  const token = getToken()
-  
-  // 如果没有token，确保用户状态被清空
-  if (!token) {
-    userStore.clearUserInfo()
+  userStore.initUser()
+})
+
+// 监听路由变化，确保登录页背景正确显示
+router.beforeEach((to, from, next) => {
+  // 如果目标是登录或注册页面，确保添加背景类
+  if (to.name === 'login' || to.name === 'register') {
+    document.body.classList.add('login-page')
+  } else {
+    document.body.classList.remove('login-page')
   }
+  next()
 })
 </script>
 
 <template>
-  <RouterView />
+  <div id="app" :class="{ 'has-background': useUserStore().getHasBackground }">
+    <RouterView />
+  </div>
 </template>
 
 <style scoped>

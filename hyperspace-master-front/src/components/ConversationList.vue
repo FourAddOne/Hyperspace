@@ -109,4 +109,34 @@ const props = defineProps({
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 暗色模式样式 */
+.dark-mode .conversation-list {
+  background-color: #1a1a1a;
+}
+
+.dark-mode .conversation-item {
+  background-color: #2d2d2d;
+}
+
+.dark-mode .conversation-item:hover {
+  background-color: #333; /* 修改悬停背景色，使其在暗色模式下更合适 */
+}
+
+.dark-mode .conversation-item.active {
+  background-color: #2d5577;
+}
+
+.dark-mode .name {
+  color: #f5f5f5; /* 修改用户名颜色，使其在暗色模式下更清晰 */
+}
+
+.dark-mode .time,
+.dark-mode .last-message {
+  color: #ccc; /* 修改时间和其他文本颜色，使其在暗色模式下更清晰 */
+}
+
+.dark-mode .avatar img {
+  background-color: #555;
+}
 </style>

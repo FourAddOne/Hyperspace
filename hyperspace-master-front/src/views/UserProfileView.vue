@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElSlider } from 'element-plus'
 import {getUserInfo, saveUserInfo, updateUserInfo} from '../utils/user'
@@ -42,6 +42,16 @@ const router = useRouter()
 
 // 用户store
 const userStore = useUserStore()
+
+// 监听暗色模式变化并应用到DOM
+watch(() => userStore.getDarkMode, (newDarkMode) => {
+  document.body.classList.toggle('dark-mode', newDarkMode)
+  
+  // 在亮色模式下清除body的背景图片
+  if (!newDarkMode) {
+    document.body.style.backgroundImage = 'none';
+  }
+})
 
 // 加载用户信息
 const loadUserInfo = async () => {
@@ -87,8 +97,10 @@ const loadUserSettings = async () => {
         settings.value.backgroundOpacity = 100;
       }
       
-      // 应用暗色模式设置
-      document.body.classList.toggle('dark-mode', settings.value.darkMode)
+      // 如果背景图片为空字符串，则设置为null
+      if (settings.value.backgroundImage === "") {
+        settings.value.backgroundImage = null;
+      }
       
       // 保存到本地存储，以便其他页面使用
       localStorage.setItem('userDarkMode', settings.value.darkMode ? 'true' : 'false')
@@ -102,15 +114,13 @@ const loadUserSettings = async () => {
       localStorage.setItem('userBackgroundImage', fullBackgroundImageUrl)
       localStorage.setItem('userBackgroundOpacity', settings.value.backgroundOpacity.toString())
       
-      // 如果有背景图片，添加类名以隐藏全局背景
-      if (settings.value.backgroundImage) {
-        document.getElementById('app')?.classList.add('has-background');
-      } else {
-        document.getElementById('app')?.classList.remove('has-background');
-      }
-      
-      // 更新store中的用户设置
+      // 更新store中的用户设置和背景状态
       userStore.setUserSettings(settings.value)
+      userStore.setHasBackground(!!settings.value.backgroundImage)
+      userStore.setDarkMode(settings.value.darkMode)
+      
+      // 应用暗色模式设置
+      document.body.classList.toggle('dark-mode', settings.value.darkMode)
     }
   } catch (error) {
     console.error('加载用户设置失败:', error)
@@ -225,14 +235,14 @@ const handleAvatarUpload = async (event: Event) => {
       formData.append('fileType', 'avatar') // 添加文件类型参数
       
       // 上传文件到服务器
-      // 修改为直接访问data，因为拦截器现在自动返回response.data
       const response = await apiClient.post(API_ENDPOINTS.FILE_UPLOAD, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       })
       
-      if (response) {
+      // 检查响应是否成功
+      if (response && response.code === 200) {
         // 删除旧头像文件（如果存在且不是默认头像）
         if (userInfo.value.avatarUrl) {
           try {
@@ -244,8 +254,8 @@ const handleAvatarUpload = async (event: Event) => {
           }
         }
         
-        // 确保只传递字符串URL而不是整个响应对象
-        const avatarUrl = typeof response === 'string' ? response : response.data;
+        // 获取头像URL
+        const avatarUrl = response.data;
         
         // 更新用户头像URL
         userInfo.value.avatarUrl = avatarUrl;
@@ -272,6 +282,8 @@ const handleAvatarUpload = async (event: Event) => {
         }
         
         ElMessage.success('头像已更新')
+      } else {
+        throw new Error(response?.msg || '上传失败')
       }
     } catch (error: any) {
       console.error('头像上传失败:', error);
@@ -299,27 +311,16 @@ const handleBackgroundUpload = async (event: Event) => {
       formData.append('fileType', 'background') // 添加文件类型参数
       
       // 上传文件到服务器
-      // 修改为直接访问data，因为拦截器现在自动返回response.data
       const response = await apiClient.post(API_ENDPOINTS.FILE_UPLOAD, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       })
       
-      if (response) {
-        // 删除旧的背景图片（如果存在）
-        if (settings.value.backgroundImage) {
-          try {
-            await apiClient.delete('/file/delete', {
-              params: { fileUrl: settings.value.backgroundImage }
-            });
-          } catch (error) {
-            console.warn('删除旧背景图片失败:', error);
-          }
-        }
-        
-        // 确保只传递字符串URL而不是整个响应对象
-        const backgroundImageUrl = typeof response === 'string' ? response : response.data;
+      // 检查响应是否成功
+      if (response && response.code === 200) {
+        // 获取背景图片URL
+        const backgroundImageUrl = response.data;
         
         // 临时保存旧的背景图片URL用于错误回滚
         const oldBackgroundImage = settings.value.backgroundImage;
@@ -330,6 +331,17 @@ const handleBackgroundUpload = async (event: Event) => {
         // 保存设置到数据库
         try {
           await saveSettings();
+          
+          // 只有在保存设置成功后，才删除旧的背景图片
+          if (oldBackgroundImage) {
+            try {
+              await apiClient.delete('/file/delete', {
+                params: { fileUrl: oldBackgroundImage }
+              });
+            } catch (error) {
+              console.warn('删除旧背景图片失败:', error);
+            }
+          }
         } catch (error) {
           // 如果保存失败，回滚背景图片URL
           settings.value.backgroundImage = oldBackgroundImage;
@@ -349,6 +361,8 @@ const handleBackgroundUpload = async (event: Event) => {
         }));
         
         ElMessage.success('背景图片已更新')
+      } else {
+        throw new Error(response?.msg || '上传失败')
       }
     } catch (error: any) {
       console.error('背景图片上传失败:', error);
@@ -373,27 +387,21 @@ const saveSettings = async () => {
       
       localStorage.setItem('userBackgroundImage', fullBackgroundImageUrl)
       localStorage.setItem('userBackgroundOpacity', settings.value.backgroundOpacity.toString())
+      
+      // 更新store中的背景状态
+      userStore.setHasBackground(!!settings.value.backgroundImage)
     }
     
-    // 如果有背景图片，添加类名以隐藏全局背景
-    if (settings.value.backgroundImage) {
-      document.getElementById('app')?.classList.add('has-background');
-    } else {
-      document.getElementById('app')?.classList.remove('has-background');
-    }
-    
-    return response
+    ElMessage.success('设置已保存')
   } catch (error) {
     console.error('保存设置失败:', error)
-    ElMessage.error('设置保存失败')
-    return false
+    ElMessage.error('保存设置失败')
   }
 }
 
 // 切换暗色模式
 const toggleDarkMode = async () => {
   settings.value.darkMode = !settings.value.darkMode
-  document.body.classList.toggle('dark-mode', settings.value.darkMode)
   
   // 在亮色模式下清除body的背景图片
   if (!settings.value.darkMode) {
@@ -420,7 +428,7 @@ const toggleDarkMode = async () => {
   }
   
   // 同步更新store中的设置
-  userStore.updateUserSettings({ darkMode: settings.value.darkMode })
+  userStore.setDarkMode(settings.value.darkMode)
 }
 
 // 更改布局
@@ -471,15 +479,43 @@ const onBackgroundOpacityChange = async (value: number) => {
   // 保存到本地存储
   localStorage.setItem('userBackgroundOpacity', value.toString());
   
-  // 自动保存设置
+  // 自动保存设置（只保存透明度相关的设置）
   try {
-    await saveSettings();
-    ElMessage.success('背景透明度已保存');
+    // 创建一个只包含必要字段的对象，确保背景图片URL格式正确
+    const settingsToUpdate = {
+      darkMode: settings.value.darkMode,
+      backgroundImage: settings.value.backgroundImage,
+      backgroundOpacity: settings.value.backgroundOpacity,
+      layout: settings.value.layout,
+      personalSignature: settings.value.personalSignature,
+      gender: settings.value.gender,
+      age: settings.value.age
+    };
     
-    // 发送自定义事件通知其他组件更新
-    window.dispatchEvent(new CustomEvent('backgroundOpacityChanged', {
-      detail: { opacity: value }
-    }));
+    // 确保背景图片URL是相对路径格式，而不是完整URL
+    if (settingsToUpdate.backgroundImage && settingsToUpdate.backgroundImage.startsWith('http')) {
+      // 从完整URL中提取相对路径
+      try {
+        const url = new URL(settingsToUpdate.backgroundImage);
+        const path = url.pathname;
+        // 移除开头的斜杠
+        settingsToUpdate.backgroundImage = path.startsWith('/') ? path.substring(1) : path;
+      } catch (e) {
+        console.error('解析背景图片URL失败:', e);
+      }
+    }
+    
+    const response = await apiClient.post(API_ENDPOINTS.USER_SETTINGS, settingsToUpdate);
+    if (response && response.code === 200) {
+      ElMessage.success('背景透明度已保存');
+      
+      // 发送自定义事件通知其他组件更新
+      window.dispatchEvent(new CustomEvent('backgroundOpacityChanged', {
+        detail: { opacity: value }
+      }));
+    } else {
+      throw new Error(response?.msg || '保存失败');
+    }
   } catch (error) {
     console.error('保存背景透明度失败:', error);
     ElMessage.error('背景透明度保存失败');

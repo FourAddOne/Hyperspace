@@ -4,8 +4,9 @@ import com.lihuahua.hyperspace.enums.LoginFail;
 import com.lihuahua.hyperspace.exception.LoginException;
 import com.lihuahua.hyperspace.models.dto.LoginDTO;
 import com.lihuahua.hyperspace.models.entity.User;
+import com.lihuahua.hyperspace.models.vo.AuthVO;
 import com.lihuahua.hyperspace.models.vo.ResVO;
-import com.lihuahua.hyperspace.models.vo.UserLoginVO;
+import com.lihuahua.hyperspace.models.vo.UserProfileVO;
 import com.lihuahua.hyperspace.server.UserServer;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,21 +28,35 @@ public class loginController {
 
     @Operation(summary = "用户登录")
     @PostMapping("/login")
-    public ResVO<UserLoginVO> login(@RequestBody LoginDTO loginUser) {
+    public ResVO<Map<String, Object>> login(@RequestBody LoginDTO loginUser) {
         Map<String, String> credential = new HashMap<>();
         credential.put("userId", loginUser.getUserId());
         credential.put("email", loginUser.getEmail());
         credential.put("password", loginUser.getPassword());
-        credential.put("ip", loginUser.getIp());
+        credential.put("ip", loginUser.getIp()); // 修复字段名
 
         try {
-            UserLoginVO resUser = userServer.login(credential);
+            AuthVO authVO = userServer.login(credential);
+            // 获取用户信息
+            UserProfileVO userProfileVO = userServer.getUserInfo(authVO.getUserId());
+            
+            // 构建返回数据
+            Map<String, Object> resData = new HashMap<>();
+            resData.put("accessToken", authVO.getAccessToken());
+            resData.put("refreshToken", authVO.getRefreshToken());
+            resData.put("userId", userProfileVO.getUserId());
+            resData.put("userName", userProfileVO.getUserName());
+            resData.put("email", userProfileVO.getEmail());
+            resData.put("avatarUrl", userProfileVO.getAvatarUrl());
+            resData.put("Ip", userProfileVO.getIp());
+            
             // 确保返回的accessToken不为null
-            if (resUser.getAccessToken() == null || resUser.getAccessToken().isEmpty()) {
+            if (authVO.getAccessToken() == null || authVO.getAccessToken().isEmpty()) {
                 return ResVO.fail("登录失败：无法生成访问令牌");
             }
-            return ResVO.success(resUser);
+            return ResVO.success(resData);
         } catch (Exception e) {
+            e.printStackTrace(); // 添加错误日志
             return ResVO.fail(e.getMessage());
         }
     }

@@ -66,4 +66,15 @@ const router = createRouter({
   ]
 })
 
+// 添加路由守卫确保登录和注册页面有背景
+router.beforeEach((to, from, next) => {
+  // 如果目标是登录或注册页面，确保添加背景类
+  if (to.name === 'login' || to.name === 'register') {
+    document.body.classList.add('login-page')
+  } else {
+    document.body.classList.remove('login-page')
+  }
+  next()
+})
+
 export default router

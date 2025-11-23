@@ -13,7 +13,7 @@
       <div class="search-form">
         <el-input
           v-model="searchKeyword"
-          placeholder="输入用户名或邮箱搜索用户"
+          placeholder="输入用户ID或用户名搜索用户"
           class="search-input"
           @keyup.enter="searchUsers"
         >
@@ -36,7 +36,7 @@
         <el-avatar :src="getFullAvatarUrl(user.avatarUrl)" :size="40" />
         <div class="user-info">
           <div class="username">{{ user.userName }}</div>
-          <div class="user-email">{{ user.email }}</div>
+          <div class="user-id">ID: {{ user.userId }}</div>
         </div>
         <div class="user-actions">
           <el-button 
@@ -59,7 +59,7 @@
     </div>
     
     <div class="instructions" v-else>
-      <p>请输入用户名或邮箱来搜索用户</p>
+      <p>请输入用户ID或用户名来搜索用户</p>
     </div>
   </div>
 </template>
@@ -104,7 +104,8 @@ const searchUsers = async () => {
       params: { keyword: searchKeyword.value }
     })
     
-    searchResults.value = response.data
+    searchResults.value = response.data || []
+    console.log('搜索结果:', searchResults.value)
   } catch (error: any) {
     console.error('搜索用户失败:', error)
     ElMessage.error('搜索用户失败: ' + (error.message || '未知错误'))
@@ -135,21 +136,26 @@ const sendFriendRequest = async (userId: string) => {
 
 // 检查是否已经是好友
 const isFriend = (userId: string) => {
-  return friends.value.some(friend => friend.userId === userId)
+  return friends.value && Array.isArray(friends.value) 
+    ? friends.value.some(friend => friend.userId === userId)
+    : false;
 }
 
 // 检查是否已经发送过好友请求
 const hasPendingRequest = (userId: string) => {
-  return pendingRequests.value.some(request => request.userId === userId)
+  return pendingRequests.value && Array.isArray(pendingRequests.value)
+    ? pendingRequests.value.some(request => request.userId === userId)
+    : false;
 }
 
 // 加载好友列表
 const loadFriends = async () => {
   try {
     const response = await apiClient.get('/api/friends/list')
-    friends.value = response.data
+    friends.value = response.data || []
   } catch (error: any) {
     console.error('加载好友列表失败:', error)
+    friends.value = []
   }
 }
 
@@ -157,9 +163,10 @@ const loadFriends = async () => {
 const loadFriendRequests = async () => {
   try {
     const response = await apiClient.get('/api/friends/requests')
-    pendingRequests.value = response.data
+    pendingRequests.value = response.data || []
   } catch (error: any) {
     console.error('加载好友请求失败:', error)
+    pendingRequests.value = []
   }
 }
 
@@ -324,7 +331,7 @@ onMounted(() => {
   color: #333; /* 设置用户名文字颜色 */
 }
 
-.user-email {
+.user-id {
   font-size: 12px;
   color: #666;
   white-space: nowrap;
@@ -401,6 +408,10 @@ onMounted(() => {
 
 .dark-mode .username {
   color: #f5f5f5; /* 设置暗色模式下用户名文字颜色 */
+}
+
+.dark-mode .user-id {
+  color: #ccc;
 }
 
 .dark-mode .user-email {
