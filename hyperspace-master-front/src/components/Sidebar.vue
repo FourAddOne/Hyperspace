@@ -2,8 +2,8 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatRound, User, Setting, SwitchButton } from '@element-plus/icons-vue'
-import { getUserInfo } from '../utils/user'
+import {ChatRound, User, Setting, SwitchButton, ChatLineSquare,SwitchFilled} from '@element-plus/icons-vue'
+import { getUserInfo, getFullAvatarUrl } from '../utils/user'
 import { removeToken } from '../utils/auth'
 import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useUserStore } from '../stores/userStore'
@@ -42,14 +42,12 @@ const logout = () => {
       removeToken()
       
       ElMessage.success('已退出登录')
-      // 确保登录页面显示背景
       router.push('/login')
     } catch (error) {
       console.error('登出失败:', error)
       // 即使后端登出失败，也要清除本地状态以确保用户能退出
       userStore.clearUserInfo()
       removeToken()
-      // 确保登录页面显示背景
       router.push('/login')
     }
   }).catch(() => {
@@ -104,23 +102,7 @@ onMounted(() => {
 
 const userAvatar = computed(() => {
   const avatarUrl = userStore.getUserInfo?.avatarUrl;
-  // 确保avatarUrl是字符串类型
-  if (typeof avatarUrl !== 'string') {
-    return '/src/assets/logo.svg';
-  }
-  
-  // 如果avatarUrl是相对路径，需要拼接OSS域名
-  if (avatarUrl && !avatarUrl.startsWith('http')) {
-    // 拼接OSS域名前缀
-    return `https://fourandone-hyperspace.oss-cn-hangzhou.aliyuncs.com/${avatarUrl}`;
-  }
-  
-  // 如果avatarUrl是OSS路径，直接返回
-  if (avatarUrl && (avatarUrl.includes('oss') || avatarUrl.includes('aliyuncs.com'))) {
-    return avatarUrl;
-  }
-  
-  return avatarUrl || '/src/assets/logo.svg';
+  return getFullAvatarUrl(avatarUrl) || '/src/assets/logo.svg';
 })
 const username = computed(() => userStore.getUserName || '未知用户')
 const userStatus = computed(() => userStore.getUserInfo?.status || '在线')
@@ -158,6 +140,22 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
           <user class="nav-icon" />
           <span>好友</span>
         </li>
+        <li
+            :class="{ active: $route.name === 'groups' }"
+            @click="$router.push('/groups')"
+        >
+          <ChatLineSquare class="nav-icon" />
+          <span>群聊</span>
+        </li>
+
+        <li
+            :class="{ active: $route.name === 'games' }"
+            @click="$router.push('/games')"
+        >
+          <SwitchFilled  class="nav-icon"/>
+          <span>游戏</span>
+        </li>
+
         <li 
           :class="{ active: $route.name === 'profile' }" 
           @click="$router.push('/profile')"
@@ -247,32 +245,39 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 15px 0;
+  padding: 12px 0;
   cursor: pointer;
   color: #666;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s;
 }
 
 .nav-menu li:hover {
-  background-color: #f0f0f0;
-  color: #333;
+  background-color: #f1f1f1;
 }
 
 .nav-menu li.active {
-  background-color: #e0f0ff;
+  background-color: #e0e0e0;
+  color: #0084ff;
+}
+
+.nav-menu li.active .nav-icon {
   color: #0084ff;
 }
 
 .nav-icon {
-  width: 24px;
-  height: 24px;
   margin-bottom: 4px;
+  width: 30px;  /* 设置图标宽度 */
+  height: 30px; /* 设置图标高度 */
+}
+
+.nav-menu li span {
+  font-size: 16px; /* 从12px缩小到10px */
 }
 
 .sidebar-footer {
   padding: 15px 0;
-  width: 100%;
   border-top: 1px solid #e0e0e0;
+  width: 100%;
 }
 
 .logout-btn {
@@ -283,45 +288,56 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
   border: none;
   color: #666;
   cursor: pointer;
+  font-size: 12px;
   width: 100%;
-  padding: 10px 0;
-  transition: all 0.3s ease;
 }
 
 .logout-btn:hover {
-  background-color: #f0f0f0;
-  color: #333;
+  background-color: #f1f1f1;
 }
 
+.logout-btn .nav-icon {
+  margin-bottom: 4px;
+  width: 30px;  /* 设置图标宽度 */
+  height: 30px; /* 设置图标高度 */
+}
+</style>
+
+<!-- 使用非scoped样式来处理暗色模式 -->
+<style>
 /* 暗色模式样式 */
 .dark-mode .sidebar {
-  background-color: #2d2d2d;
+  background-color: #1a1a1a;
   border-right: 1px solid #444;
+  color: #f5f5f5;
 }
 
-.dark-mode .user-profile-header {
+.dark-mode .sidebar .user-profile-header {
   border-bottom: 1px solid #444;
 }
 
-.dark-mode .username {
+.dark-mode .sidebar .username {
   color: #f5f5f5;
 }
 
-.dark-mode .nav-menu li {
+.dark-mode .sidebar .nav-menu li {
   color: #ccc;
 }
 
-.dark-mode .nav-menu li:hover {
+.dark-mode .sidebar .nav-menu li:hover {
   background-color: #3d3d3d;
-  color: #f5f5f5;
 }
 
-.dark-mode .nav-menu li.active {
-  background-color: #1a3a4a;
+.dark-mode .sidebar .nav-menu li.active {
+  background-color: #3d3d3d;
   color: #409eff;
 }
 
-.dark-mode .sidebar-footer {
+.dark-mode .sidebar .nav-menu li.active .nav-icon {
+  color: #409eff;
+}
+
+.dark-mode .sidebar .sidebar-footer {
   border-top: 1px solid #444;
 }
 
@@ -331,6 +347,5 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
 
 .dark-mode .logout-btn:hover {
   background-color: #3d3d3d;
-  color: #f5f5f5;
 }
 </style>

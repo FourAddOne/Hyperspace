@@ -7,12 +7,12 @@ spring:
     url: jdbc:mysql://1.15.41.43:3306/hyperspace
     username: hyperspace
     password: ${DB_PASSWORD:KFaRMeZJfrWpEA3i}
-
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:654321}
-    database: ${REDIS_DATABASE:1}
+  data:
+    redis:
+      host: ${REDIS_HOST:124.221.15.13}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:998877}
+      database: ${REDIS_DATABASE:1}
 
   servlet:
     multipart:
