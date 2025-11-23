@@ -39,6 +39,9 @@ public class Message {
     @TableField("timestamp")
     private Date timestamp;
 
+    @TableField("to_target_type")
+    private String toTargetType; // user, group
+
 
     
     // 添加索引注解以提高查询性能

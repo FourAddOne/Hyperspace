@@ -1,4 +1,3 @@
-// 在 template 部分修改
 <template>
   <div class="group-view">
     <div class="group-container">
@@ -6,6 +5,7 @@
         <div class="group-sidebar-header">
           <h2>群聊</h2>
           <el-button type="primary" circle @click="createGroup">
+            +
             <plus />
           </el-button>
         </div>
@@ -29,195 +29,165 @@
             <el-avatar :icon="ChatLineSquare" />
             <div class="group-info">
               <div class="group-name">{{ group.groupName }}</div>
-              <div class="group-description">创建于 {{ formatDate(group.createdAt) }}</div>
-            </div>
-            <div class="group-members">
-              {{ group.memberCount }}人
+              <div class="group-description">id : {{ group.groupId }}</div>
             </div>
           </div>
         </div>
       </div>
 
       <div class="group-main">
-        <div class="group-header" v-if="selectedGroup">
-          <div class="group-header-info">
-            <el-avatar :icon="ChatLineSquare" :size="40" />
-            <div class="group-header-text">
-              <div class="group-name-header">{{ selectedGroup.groupName }}</div>
-              <div class="group-member-count">{{ selectedGroup.memberCount }}名成员</div>
-            </div>
-          </div>
-          <div class="group-header-actions">
-            <el-button @click="enterGroupChat(selectedGroup.groupId)">进入聊天</el-button>
-            <el-button
-                v-if="selectedGroup.ownerId !== userStore.userId"
-                type="danger"
-                @click="quitGroup(selectedGroup.groupId)"
-            >
-              退出群组
-            </el-button>
-          </div>
-        </div>
+        <GroupChatView></GroupChatView>
 
-        <div class="group-content" v-if="selectedGroup">
-          <div class="group-details">
-            <h3>群组信息</h3>
-            <div class="group-detail-item">
-              <span class="label">群组名称:</span>
-              <span>{{ selectedGroup.groupName }}</span>
-            </div>
-            <div class="group-detail-item">
-              <span class="label">创建时间:</span>
-              <span>{{ formatDate(selectedGroup.createdAt) }}</span>
-            </div>
-            <div class="group-detail-item">
-              <span class="label">成员数量:</span>
-              <span>{{ selectedGroup.memberCount }}人</span>
-            </div>
-            <div class="group-detail-item">
-              <span class="label">群主:</span>
-              <span>{{ selectedGroup.ownerId === userStore.userId ? '我' : selectedGroup.ownerId }}</span>
-            </div>
-          </div>
-        </div>
 
-        <div class="group-placeholder" v-else>
-          <div class="placeholder-content">
-            <chat-line-square class="placeholder-icon" />
-            <p>选择一个群组或创建新群组</p>
-            <el-button type="primary" @click="createGroup">创建群组</el-button>
-          </div>
-        </div>
+
       </div>
     </div>
   </div>
 </template>
 
-
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ChatLineSquare, Plus } from '@element-plus/icons-vue'
-import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useUserStore } from '../stores/userStore'
+import apiClient from '../services/api'
+import GroupChatView from "@/views/GroupChatView.vue";
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
 
 interface Group {
-  id: string
-  name: string
-  description: string
-  memberCount: number
+  groupId: string
+  groupName: string
+  userId: string | null
+  role: string | null
+  members: string[]
 }
+
+// 初始化 STOMP 客户端
+const stompClient = new Client({
+  webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+  debug: (str) => {
+    console.log(str)
+  },
+  onConnect: () => {
+    console.log('WebSocket 连接成功')
+    subscribeUserGroups()
+  },
+  onDisconnect: () => {
+    console.log('WebSocket 连接断开')
+  }
+})
 
 const router = useRouter()
 const userStore = useUserStore()
 
 // 群组数据
 const groups = ref<Group[]>([])
-const loading = ref(false)
 const selectedGroup = ref<Group | null>(null)
+const searchKeyword = ref('')
+const loading = ref(false)
 
 // 获取群组列表
 const fetchGroups = async () => {
+  console.log('获取群组列表...')
   loading.value = true
   try {
-    const response = await apiClient.get('/api/groups/list', {
-      params: {
-        userId: userStore.userId
-      }
+    const response = await apiClient.post('/api/groups/list', {
+      userId: userStore.getUserEmail
     })
-    groups.value = response.data
+    if (200 === response.code) {
+      groups.value = response.data
+    }
   } catch (error) {
+    console.error('获取群组列表失败: ', error)
     ElMessage.error('获取群组列表失败')
-    console.error('获取群组列表失败:', error)
   } finally {
     loading.value = false
   }
 }
 
+// 过滤群组
+const filteredGroups = computed(() => {
+  if (!searchKeyword.value) return groups.value
+  return groups.value.filter(group =>
+    group.groupName.toLowerCase().includes(searchKeyword.value.toLowerCase())
+  )
+})
+
 // 选择群组
+// 替换现有的 selectGroup 方法
 const selectGroup = (group: Group) => {
-  selectedGroup.value = group
+  // 直接进入聊天页面
+  router.push(`/group/${group.groupId}/chat`)
 }
 
-const createGroup = async () => {
-  try {
-    const response = await apiClient.post('/api/groups/create', {
-      groupName: '新群组',
-      ownerId: userStore.userId
-    })
-    if (response.code === 200) {
-      ElMessage.success('创建群组成功')
-      await fetchGroups() // 刷新群组列表
-    }
-  } catch (error) {
-    ElMessage.error('创建群组失败')
-    console.error('创建群组失败:', error)
-  }
+// 创建群组
+const createGroup = () => {
+  ElMessage.info('创建群组功能开发中...')
 }
-// 加入群组
-const joinGroup = async (groupId: string) => {
-  try {
-    const response = await apiClient.post('/api/groups/join', null, {
-      params: {
-        groupId,
-        userId: userStore.userId
-      }
-    })
-    if (response.code === 200) {
-      ElMessage.success('加入群组成功')
-      await fetchGroups() // 刷新群组列表
-    }
-  } catch (error) {
-    ElMessage.error('加入群组失败')
-    console.error('加入群组失败:', error)
-  }
+
+// 搜索群组
+const searchGroups = () => {
+  // 搜索功能已通过计算属性实现
 }
+
 // 退出群组
-const quitGroup = async (groupId: string) => {
-  try {
-    const response = await apiClient.post('/api/groups/quit', null, {
-      params: {
-        groupId,
-        userId: userStore.userId
-      }
-    })
-    if (response.code === 200) {
-      ElMessage.success('退出群组成功')
-      await fetchGroups() // 刷新群组列表
-      selectedGroup.value = null // 清除选中状态
-    }
-  } catch (error) {
-    ElMessage.error('退出群组失败')
-    console.error('退出群组失败:', error)
-  }
+const quitGroup = (groupId: string) => {
+    ElMessage.confirm('确定要退出该群组吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    groups.value = groups.value.filter(g => g.groupId !== groupId)
+    selectedGroup.value = null
+    ElMessage.success('已退出群组')
+  }).catch(() => {
+    // 取消退出
+  })
 }
-// 获取群组成员
-const getGroupMembers = async (groupId: string) => {
-  try {
-    const response = await apiClient.get('/api/groups/members', {
-      params: {
-        groupId
-      }
-    })
-    return response.data
-  } catch (error) {
-    ElMessage.error('获取群组成员失败')
-    console.error('获取群组成员失败:', error)
-    return []
-  }
-}
+
 // 进入群组聊天
 const enterGroupChat = (groupId: string) => {
   router.push(`/group/${groupId}/chat`)
 }
 
+// 格式化日期
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString()
+}
+
+// 组件挂载时获取群组列表
 onMounted(() => {
   fetchGroups()
+  stompClient.activate()
 })
+
+
+// 1. 连接成功后，订阅当前用户所在的所有群（需从后端查询用户的群列表）
+// 订阅用户群组
+const subscribeUserGroups = () => {
+  try {
+    groups.value.forEach(group => {
+      const groupId = group.groupId
+      stompClient.subscribe(`/topic/group/${groupId}`, (message) => {
+        const msg = JSON.parse(message.body)
+        console.log(`收到群${groupId}的消息:`, msg)
+
+        // 处理接收到的消息
+      })
+    })
+  }catch ( error)
+      {
+        console.error('订阅用户群组失败:', error)
+      }
+
+}
+
 </script>
 
 <style scoped>
+/* 保持原有的样式不变 */
 .group-view {
   height: 100%;
   display: flex;
