@@ -21,7 +21,7 @@ public class MessageController {
     @PostMapping("/send")
     public ResVO<?> sendMessage(@RequestBody MessageDTO messageDTO) {
         //私聊
-        if (messageDTO.getToTargetType() == MessageConstant.TOUSER){
+        if (messageDTO.getTo_target_type()== MessageConstant.TOUSER){
             try {
                 messageDTO.setSenderId(messageDTO.getSenderId());
                 messageServer.sendMessage(messageDTO);
@@ -31,7 +31,7 @@ public class MessageController {
             }
         }
         //群聊
-        else if (messageDTO.getToTargetType() == MessageConstant.TOGROUP){
+        else if (messageDTO.getTo_target_type()== MessageConstant.TOGROUP){
             try {
                 messageDTO.setSenderId(messageDTO.getSenderId());
                 messageServer.sendGroupMessage(messageDTO);

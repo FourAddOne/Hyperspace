@@ -52,11 +52,7 @@ public class GroupServerImpl implements GroupServer {
 
     @Override
     public List<GroupDTO> groupList(GroupDTO groupDTO) {
-
-        List<GroupDTO> groupDTOS = groupMapper.groupListbyUserId(groupDTO.getUserId());
-        log.info("groupList:{}",groupDTOS);
-        return groupDTOS;
-
+        return groupMapper.groupListbyUserId(groupDTO.getUserId());
 
     }
 

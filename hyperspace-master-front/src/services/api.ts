@@ -52,13 +52,7 @@ export const API_ENDPOINTS = {
   FRIENDS_LIST: '/friends/list',
   FRIEND_REQUEST: '/friends/request',
   FRIEND_ACCEPT: '/friends/accept',
-  FRIEND_REJECT: '/friends/reject',
-  GROUPLIST: '/groups/list',
-  GROUP_CREATE: '/groups/create',
-  GROUP_INVITE: '/groups/invite',
-  GROUP_JOIN: '/groups/join',
-  GROUP_LEAVE: '/groups/leave',
-  GROUP_DELETE: '/groups/delete'
+  FRIEND_REJECT: '/friends/reject'
 }
 
 export default apiClient
