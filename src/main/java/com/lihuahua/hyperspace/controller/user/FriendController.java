@@ -97,15 +97,4 @@ public class FriendController {
             return ResVO.fail(e.getMessage());
         }
     }
-    
-    // 获取用户发出的好友申请列表
-    @GetMapping("/sent-requests")
-    public ResVO<List<UserLoginVO>> getSentFriendRequests(@RequestAttribute("userId") String userId) {
-        try {
-            List<UserLoginVO> requests = friendServer.getSentFriendRequests(userId);
-            return ResVO.success(requests);
-        } catch (Exception e) {
-            return ResVO.fail(e.getMessage());
-        }
-    }
 }

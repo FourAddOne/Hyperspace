@@ -30,7 +30,4 @@ public interface FriendServer {
     
     // 更新好友备注
     boolean updateFriendRemark(String userId, String friendId, String remark);
-    
-    // 获取用户发出的好友请求
-    List<UserLoginVO> getSentFriendRequests(String userId);
 }

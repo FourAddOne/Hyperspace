@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import apiClient, { API_ENDPOINTS } from '../services/api'
 import { saveToken } from '../utils/auth'
-import { saveUserInfo, getFullAvatarUrl } from '../utils/user'
+import { saveUserInfo } from '../utils/user'
 import { useUserStore } from '../stores/userStore'
 import { getUserIP } from '../utils/ip'
 
@@ -76,11 +76,6 @@ const handleLogin = async () => {
       if (!userData || !userData.accessToken) {
         console.error('登录响应中缺少访问令牌:', loginResponse);
         throw new Error('登录响应中缺少访问令牌');
-      }
-      
-      // 确保头像URL是完整的
-      if (userData.avatarUrl) {
-        userData.avatarUrl = getFullAvatarUrl(userData.avatarUrl);
       }
       
       // 保存token到localStorage

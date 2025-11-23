@@ -39,7 +39,4 @@ public class UserLoginVO {
     
     @Schema(description = "登录状态")
     private Boolean loginStatus;
-    
-    @Schema(description = "好友备注")
-    private String remark;
 }
