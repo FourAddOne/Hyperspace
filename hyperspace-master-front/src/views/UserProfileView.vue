@@ -87,11 +87,6 @@ const loadUserSettings = async () => {
         settings.value.backgroundOpacity = 100;
       }
       
-      // 如果背景图片为空字符串，则设置为null
-      if (settings.value.backgroundImage === "") {
-        settings.value.backgroundImage = null;
-      }
-      
       // 应用暗色模式设置
       document.body.classList.toggle('dark-mode', settings.value.darkMode)
       
@@ -387,10 +382,11 @@ const saveSettings = async () => {
       document.getElementById('app')?.classList.remove('has-background');
     }
     
-    ElMessage.success('设置已保存')
+    return response
   } catch (error) {
     console.error('保存设置失败:', error)
-    ElMessage.error('保存设置失败')
+    ElMessage.error('设置保存失败')
+    return false
   }
 }
 

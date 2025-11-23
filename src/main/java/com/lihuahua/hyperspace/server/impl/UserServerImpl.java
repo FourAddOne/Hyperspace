@@ -1,12 +1,12 @@
 package com.lihuahua.hyperspace.server.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.lihuahua.hyperspace.mapper.FriendMapper;
 import com.lihuahua.hyperspace.mapper.UserMapper;
 import com.lihuahua.hyperspace.mapper.UserSettingsMapper;
 import com.lihuahua.hyperspace.models.entity.User;
 import com.lihuahua.hyperspace.models.entity.UserSettings;
-import com.lihuahua.hyperspace.models.vo.*;
+import com.lihuahua.hyperspace.models.vo.UserLoginVO;
+import com.lihuahua.hyperspace.models.vo.UserSettingsVO;
 import com.lihuahua.hyperspace.server.UserServer;
 import com.lihuahua.hyperspace.utils.IdUtil;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
@@ -16,7 +16,6 @@ import com.lihuahua.hyperspace.utils.OssUtil;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
-import com.lihuahua.hyperspace.models.entity.Friend;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -39,11 +38,8 @@ public class UserServerImpl implements UserServer {
     @Resource
     private OssProperties ossProperties;
     
-    @Resource
-    private FriendMapper friendMapper; // 添加FriendMapper注入
-    
     @Override
-    public AuthVO login(Map<String, String> credential) {
+    public UserLoginVO login(Map<String, String> credential) {
         String userId = credential.get("userId");
         String email = credential.get("email");
         String password = credential.get("password");
@@ -82,14 +78,19 @@ public class UserServerImpl implements UserServer {
         String accessToken = JwtTokenUtil.generateAccessToken(user.getUserId());
         String refreshToken = JwtTokenUtil.generateRefreshToken(user.getUserId());
         
-        // 构建返回的认证信息
-        AuthVO authVO = AuthVO.builder()
+        // 构建返回的用户信息
+        UserLoginVO userLoginVO = UserLoginVO.builder()
                 .userId(user.getUserId())
+                .userName(user.getUserName())
+                .email(user.getEmail())
+                .avatarUrl(user.getAvatarUrl())
+                .Ip(user.getLoginIp())
+                .loginStatus(user.getLoginStatus()) // 添加用户在线状态
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
 
-        return authVO;
+        return userLoginVO;
     }
     
     /**
@@ -128,53 +129,41 @@ public class UserServerImpl implements UserServer {
         
         // 创建新用户
         User newUser = new User();
-        newUser.setUserId(generateUniqueUserId()); // 生成唯一用户ID
+        String userId = generateUniqueUserId(); // 使用新的唯一ID生成方法
+        newUser.setUserId(userId);
         newUser.setUserName(username);
         newUser.setEmail(email);
+        // 使用加密方法设置密码
+        newUser.setEncryptedPassword(password);
         newUser.setRegisterIp(ip);
         newUser.setLoginIp(ip);
-        newUser.setEncryptedPassword(password); // 加密密码
         newUser.setLoginStatus(false);
-        newUser.setAvatarUrl(""); // 默认头像为空
-        newUser.setLastReadTs(System.currentTimeMillis());
         newUser.setCreatedAt(new Date());
         newUser.setUpdatedAt(new Date());
         
-        int result = userMapper.insert(newUser);
-        
-        // 创建默认用户设置
-        UserSettings defaultSettings = new UserSettings();
-        defaultSettings.setUserId(newUser.getUserId());
-        defaultSettings.setDarkMode(false);
-        defaultSettings.setBackgroundImage(null);
-        defaultSettings.setBackgroundOpacity(100);
-        defaultSettings.setLayout("default");
-        defaultSettings.setPersonalSignature("");
-        defaultSettings.setGender("");
-        defaultSettings.setAge(null);
-        defaultSettings.setCreatedAt(new Date());
-        defaultSettings.setUpdatedAt(new Date());
-        userSettingsMapper.insert(defaultSettings);
-        
-        return result > 0;
+        return userMapper.insert(newUser) > 0;
     }
     
     @Override
     public Boolean logout(String userId) {
+        // 更新用户登录状态
         User user = userMapper.selectById(userId);
         if (user != null) {
-            user.setLoginStatus(false);
+            user.setLoginStatus(false); // 设置用户为离线状态
             userMapper.updateById(user);
+            
+            // 从Redis中删除用户的token
+            JwtTokenUtil.removeTokenFromRedis(userId);
             return true;
         }
         return false;
     }
     
     @Override
-    public UserProfileVO getUserInfo(String userId) {
+    public UserLoginVO getUserInfo(String userId) {
         User user = userMapper.selectById(userId);
         if (user != null) {
-            UserProfileVO userProfileVO = UserProfileVO.builder()
+            UserLoginVO userLoginVO = UserLoginVO.builder()
                     .userId(user.getUserId())
                     .userName(user.getUserName())
                     .email(user.getEmail())
@@ -184,19 +173,11 @@ public class UserServerImpl implements UserServer {
                     .build();
             
             // 如果头像URL是相对路径，转换为完整URL
-            if (userProfileVO.getAvatarUrl() != null && !userProfileVO.getAvatarUrl().startsWith("http")) {
-                userProfileVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userProfileVO.getAvatarUrl());
+            if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
+                userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
             }
             
-            // 获取个人签名
-            QueryWrapper<UserSettings> settingsWrapper = new QueryWrapper<>();
-            settingsWrapper.eq("user_id", userId);
-            UserSettings userSettings = userSettingsMapper.selectOne(settingsWrapper);
-            if (userSettings != null) {
-                userProfileVO.setPersonalSignature(userSettings.getPersonalSignature());
-            }
-            
-            return userProfileVO;
+            return userLoginVO;
         }
         return null;
     }
@@ -212,19 +193,41 @@ public class UserServerImpl implements UserServer {
                     // 如果是本地文件，使用本地删除方法
                     if (oldAvatarUrl.startsWith("/uploads/")) {
                         localFileUtil.deleteLocalFile(oldAvatarUrl);
-                    }
+                        System.out.println("已删除用户 " + userId + " 的旧头像: " + oldAvatarUrl);
+                    } 
                     // 如果是OSS文件，调用OSS删除方法
                     else if (oldAvatarUrl.contains("oss") || oldAvatarUrl.contains("aliyuncs.com")) {
-                        ossUtil.deleteFileFromOSS(oldAvatarUrl);
+                        // 实际删除OSS文件
+                        boolean deleted = ossUtil.deleteFileFromOSS(oldAvatarUrl);
+                        if (deleted) {
+                            System.out.println("已删除用户 " + userId + " 的旧OSS头像: " + oldAvatarUrl);
+                        } else {
+                            System.out.println("删除用户 " + userId + " 的旧OSS头像失败: " + oldAvatarUrl);
+                        }
+                    }
+                    // 如果是相对路径，说明是OSS文件
+                    else if (!oldAvatarUrl.startsWith("http")) {
+                        // 实际删除OSS文件
+                        boolean deleted = ossUtil.deleteFileFromOSS(oldAvatarUrl);
+                        if (deleted) {
+                            System.out.println("已删除用户 " + userId + " 的旧OSS头像: " + oldAvatarUrl);
+                        } else {
+                            System.out.println("删除用户 " + userId + " 的旧OSS头像失败: " + oldAvatarUrl);
+                        }
                     }
                 } catch (Exception e) {
-                    System.out.println("删除旧头像文件失败: " + e.getMessage());
+                    System.out.println("删除用户 " + userId + " 的旧头像失败: " + oldAvatarUrl + ", 错误: " + e.getMessage());
                 }
             }
             
+            // 如果新头像URL是完整URL，提取相对路径存储到数据库
+            String avatarPathToSave = newAvatarUrl;
+            if (newAvatarUrl != null && newAvatarUrl.startsWith("http") && newAvatarUrl.contains(ossProperties.getBucketName())) {
+                avatarPathToSave = ossUtil.extractObjectNameFromUrl(newAvatarUrl);
+            }
+            
             // 更新用户头像URL
-            user.setAvatarUrl(newAvatarUrl);
-            user.setUpdatedAt(new Date());
+            user.setAvatarUrl(avatarPathToSave);
             userMapper.updateById(user);
             return true;
         }
@@ -238,37 +241,24 @@ public class UserServerImpl implements UserServer {
         UserSettings userSettings = userSettingsMapper.selectOne(wrapper);
         
         if (userSettings != null) {
-            UserSettingsVO userSettingsVO = UserSettingsVO.builder()
-                    .userId(userId)
-                    .darkMode(userSettings.getDarkMode())
-                    .backgroundImage(userSettings.getBackgroundImage())
-                    .backgroundOpacity(userSettings.getBackgroundOpacity())
-                    .layout(userSettings.getLayout())
-                    .personalSignature(userSettings.getPersonalSignature())
-                    .gender(userSettings.getGender())
-                    .age(userSettings.getAge())
-                    .build();
+            UserSettingsVO userSettingsVO = new UserSettingsVO();
+            BeanUtils.copyProperties(userSettings, userSettingsVO);
             
             // 如果背景图片URL是相对路径，转换为完整URL
-            if (userSettingsVO.getBackgroundImage() != null && 
-                !userSettingsVO.getBackgroundImage().isEmpty() && 
-                !userSettingsVO.getBackgroundImage().startsWith("http")) {
+            if (userSettingsVO.getBackgroundImage() != null && !userSettingsVO.getBackgroundImage().startsWith("http")) {
                 userSettingsVO.setBackgroundImage(ossProperties.getOssDomainPrefix() + userSettingsVO.getBackgroundImage());
             }
             
             return userSettingsVO;
         }
         
-        // 如果没有找到设置，返回默认设置
+        // 如果用户设置不存在，返回默认设置
         return UserSettingsVO.builder()
                 .userId(userId)
                 .darkMode(false)
-                .backgroundImage(null)
-                .backgroundOpacity(100)
+                .backgroundImage("")
+                .backgroundOpacity(100) // 默认透明度为100%
                 .layout("default")
-                .personalSignature("")
-                .gender("")
-                .age(null)
                 .build();
     }
     
@@ -297,9 +287,7 @@ public class UserServerImpl implements UserServer {
             // 检查背景图片是否发生变化，如果变化则删除旧的背景图片
             if (existingSettings.getBackgroundImage() != null && 
                 userSettingsVO.getBackgroundImage() != null &&
-                !existingSettings.getBackgroundImage().equals(userSettingsVO.getBackgroundImage()) &&
-                !existingSettings.getBackgroundImage().isEmpty() &&
-                !userSettingsVO.getBackgroundImage().isEmpty()) {
+                !existingSettings.getBackgroundImage().equals(userSettingsVO.getBackgroundImage())) {
                 try {
                     String oldBackgroundImage = existingSettings.getBackgroundImage();
                     // 如果是本地文件，使用本地删除方法
@@ -340,83 +328,65 @@ public class UserServerImpl implements UserServer {
     }
     
     @Override
-    public List<UserBasicVO> searchUsers(String keyword) {
+    public List<UserLoginVO> searchUsers(String keyword) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.and(wrapper -> wrapper.like("user_id", keyword).or().like("user_name", keyword));
         queryWrapper.last("LIMIT 20"); // 限制返回结果数量
         
         List<User> users = userMapper.selectList(queryWrapper);
-        List<UserBasicVO> userBasicVOs = new ArrayList<>();
+        List<UserLoginVO> userLoginVOs = new ArrayList<>();
         
         for (User user : users) {
-            UserBasicVO userBasicVO = UserBasicVO.builder()
+            UserLoginVO userLoginVO = UserLoginVO.builder()
                     .userId(user.getUserId())
                     .userName(user.getUserName())
                     .email(user.getEmail())
                     .avatarUrl(user.getAvatarUrl())
                     .Ip(user.getLoginIp())
-                    .loginStatus(user.getLoginStatus())
                     .build();
             
             // 如果头像URL是相对路径，转换为完整URL
-            if (userBasicVO.getAvatarUrl() != null && !userBasicVO.getAvatarUrl().startsWith("http")) {
-                userBasicVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userBasicVO.getAvatarUrl());
+            if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
+                userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
             }
             
-            userBasicVOs.add(userBasicVO);
+            userLoginVOs.add(userLoginVO);
         }
         
-        return userBasicVOs;
+        return userLoginVOs;
     }
     
     @Override
-    public List<UserBasicVO> searchUsers(String keyword, String userId) {
-        // 先查询用户屏蔽了哪些用户
-        QueryWrapper<Friend> blockWrapper = new QueryWrapper<>();
-        blockWrapper.eq("user_id", userId).eq("status", "BLOCKED");
-        List<Friend> blockedFriends = friendMapper.selectList(blockWrapper);
-        
-        // 提取被屏蔽的用户ID列表
-        List<String> blockedUserIds = new ArrayList<>();
-        for (Friend friend : blockedFriends) {
-            blockedUserIds.add(friend.getFriendId());
-        }
-        
+    public List<UserLoginVO> searchUsers(String keyword, String excludeUserId) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.and(wrapper -> wrapper.like("user_id", keyword).or().like("user_name", keyword));
-        
-        // 排除被屏蔽的用户
-        if (!blockedUserIds.isEmpty()) {
-            queryWrapper.notIn("user_id", blockedUserIds);
+        // 排除指定用户
+        if (excludeUserId != null && !excludeUserId.isEmpty()) {
+            queryWrapper.ne("user_id", excludeUserId);
         }
-        
-        // 排除自己
-        queryWrapper.ne("user_id", userId);
-        
         queryWrapper.last("LIMIT 20"); // 限制返回结果数量
         
         List<User> users = userMapper.selectList(queryWrapper);
-        List<UserBasicVO> userBasicVOs = new ArrayList<>();
+        List<UserLoginVO> userLoginVOs = new ArrayList<>();
         
         for (User user : users) {
-            UserBasicVO userBasicVO = UserBasicVO.builder()
+            UserLoginVO userLoginVO = UserLoginVO.builder()
                     .userId(user.getUserId())
                     .userName(user.getUserName())
                     .email(user.getEmail())
                     .avatarUrl(user.getAvatarUrl())
                     .Ip(user.getLoginIp())
-                    .loginStatus(user.getLoginStatus())
                     .build();
             
             // 如果头像URL是相对路径，转换为完整URL
-            if (userBasicVO.getAvatarUrl() != null && !userBasicVO.getAvatarUrl().startsWith("http")) {
-                userBasicVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userBasicVO.getAvatarUrl());
+            if (userLoginVO.getAvatarUrl() != null && !userLoginVO.getAvatarUrl().startsWith("http")) {
+                userLoginVO.setAvatarUrl(ossProperties.getOssDomainPrefix() + userLoginVO.getAvatarUrl());
             }
             
-            userBasicVOs.add(userBasicVO);
+            userLoginVOs.add(userLoginVO);
         }
         
-        return userBasicVOs;
+        return userLoginVOs;
     }
     
     @Override

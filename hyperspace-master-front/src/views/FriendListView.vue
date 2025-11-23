@@ -46,6 +46,24 @@
       </div>
     </div>
     
+    <div class="sent-friend-requests" v-if="sentRequests.length > 0">
+      <h3>已发送的好友请求</h3>
+      <div 
+        v-for="request in sentRequests" 
+        :key="request.userId" 
+        class="friend-request-item sent-request"
+      >
+        <el-avatar :src="getFullAvatarUrl(request.avatarUrl)" :size="40" />
+        <div class="request-info">
+          <div class="username">{{ request.userName }}</div>
+          <div class="request-status">等待对方接受</div>
+        </div>
+        <div class="request-actions">
+          <el-tag type="info">已发送</el-tag>
+        </div>
+      </div>
+    </div>
+    
     <div class="friends-list">
       <h3>好友</h3>
       <div 
@@ -57,14 +75,14 @@
       >
         <el-avatar :src="getFullAvatarUrl(friend.avatarUrl)" :size="40" />
         <div class="friend-info">
-          <div class="username">{{ friend.userName }}</div>
+          <div class="username">{{ friend.remark ? friend.remark + '(' + friend.userName + ')' : friend.userName }}</div>
           <div class="friend-signature" v-if="friend.personalSignature">
             {{ friend.personalSignature.length > 30 ? friend.personalSignature.substring(0, 30) + '...' : friend.personalSignature }}
           </div>
           <div class="friend-signature empty" v-else>
             暂无签名
           </div>
-          <div class="friend-email">{{ friend.email }}</div>
+
         </div>
         <div class="friend-status" :class="{ online: friend.loginStatus }">
           {{ friend.loginStatus ? '在线' : '离线' }}
@@ -99,9 +117,12 @@
             v-model="remarkInput" 
             type="text" 
             class="form-input"
-            maxlength="20"
-            placeholder="请输入备注名（最多20个字符）"
+            maxlength="15"
+            placeholder="请输入备注名（最多15个字符）"
           />
+          <div class="remark-count" v-if="remarkInput">
+            {{ remarkInput.length }}/15
+          </div>
         </div>
       </div>
       <div class="dialog-footer">
@@ -125,6 +146,7 @@ const router = useRouter()
 const searchKeyword = ref('')
 const friends = ref<any[]>([])
 const pendingRequests = ref<any[]>([])
+const sentRequests = ref<any[]>([])
 const allFriends = ref<any[]>([])
 
 // 计算属性：过滤后的好友列表
@@ -156,6 +178,7 @@ const searchFriends = () => {
 const loadFriends = async () => {
   try {
     const response = await apiClient.get('/api/friends/list')
+    console.log('好友列表数据:', response.data); // 添加调试日志
     allFriends.value = response.data
     filteredFriends.value = response.data
     friends.value = response.data
@@ -218,6 +241,14 @@ const loadFriendRequests = async () => {
     pendingRequests.value = response.data
   } catch (error: any) {
     ElMessage.error('加载好友请求失败: ' + error.message)
+  }
+  
+  // 加载已发送的好友请求
+  try {
+    const response = await apiClient.get('/api/friends/sent-requests')
+    sentRequests.value = response.data
+  } catch (error: any) {
+    ElMessage.error('加载已发送的好友请求失败: ' + error.message)
   }
 }
 
@@ -302,13 +333,19 @@ const deleteFriend = (friendId: string) => {
 // 编辑备注
 const editRemark = (friend: any) => {
   currentFriend.value = friend;
-  remarkInput.value = friend.userName; // 默认使用当前用户名作为备注
+  remarkInput.value = friend.remark || ''; // 使用备注作为默认值，如果没有备注则为空
   showRemarkDialog.value = true;
 };
 
 // 保存备注
 const saveRemark = async () => {
   if (!currentFriend.value) return;
+  
+  // 检查备注长度
+  if (remarkInput.value.length > 15) {
+    ElMessage.error('备注不能超过15个字符');
+    return;
+  }
   
   try {
     await apiClient.post('/api/friends/remark', null, {
@@ -436,7 +473,21 @@ watch(searchKeyword, () => {
   margin-bottom: 30px;
 }
 
+.sent-friend-requests {
+  margin-bottom: 30px;
+}
+
+.sent-request {
+  opacity: 0.85;
+}
+
+.request-status {
+  font-size: 12px;
+  color: #888;
+}
+
 .friend-requests h3,
+.sent-friend-requests h3,
 .friends-list h3 {
   margin-top: 0;
   border-bottom: 1px solid #eee;
@@ -495,9 +546,7 @@ watch(searchKeyword, () => {
 }
 
 .request-time,
-.friend-email {
-  color: #666;
-}
+
 
 .request-actions {
   display: flex;
@@ -540,92 +589,231 @@ watch(searchKeyword, () => {
   color: #999;
 }
 
+/* 备注编辑对话框样式 */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog-content {
+  background: white;
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 20px 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.dialog-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.dialog-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #999;
+}
+
+.dialog-close:hover {
+  color: #333;
+}
+
+.dialog-body {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 15px 20px;
+  border-top: 1px solid #eee;
+}
+
+.cancel-button,
+.save-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.cancel-button {
+  background: #f5f7fa;
+  border: 1px solid #dcdfe6;
+  color: #606266;
+}
+
+.cancel-button:hover {
+  background: #f0f2f5;
+}
+
+.save-button {
+  background: #667eea;
+  border: 1px solid #667eea;
+  color: white;
+}
+
+.save-button:hover {
+  background: #5a6fd8;
+}
+
 /* 暗色模式样式 */
 .dark-mode .friend-list-view {
   background-color: #1a1a1a;
   color: #f5f5f5;
 }
 
-.dark-mode .friend-list-header h2,
-.dark-mode .friend-requests h3,
-.dark-mode .friends-list h3 {
+.dark-mode .friend-list-header h2 {
   color: #f5f5f5;
 }
 
-.dark-mode .add-friend-button {
-  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-.dark-mode .add-friend-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.dark-mode .search-input :deep(.el-input__inner) {
-  background-color: #2d3748;
-  border-color: #4a5568;
-  color: #f7fafc;
-}
-
-.dark-mode .search-input :deep(.el-input__inner:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
-}
-
-.dark-mode .search-input :deep(.el-input__wrapper) {
-  background: transparent;
-  box-shadow: none;
-  border: none;
-}
-
-/* 已移除搜索按钮相关样式 */
-
 .dark-mode .friend-requests h3,
+.dark-mode .sent-friend-requests h3,
 .dark-mode .friends-list h3 {
   border-bottom: 1px solid #444;
+  color: #f5f5f5;
 }
 
 .dark-mode .friend-request-item,
 .dark-mode .friend-item {
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid #333;
 }
 
 .dark-mode .friend-request-item:hover,
 .dark-mode .friend-item:hover {
-  background-color: #3d3d3d;
+  background-color: #333; /* 修改悬停背景色，使其在暗色模式下更合适 */
 }
 
 .dark-mode .username {
-  color: #f5f5f5; /* 设置暗色模式下用户名文字颜色 */
+  color: #f5f5f5; /* 修改用户名颜色，使其在暗色模式下更清晰 */
 }
 
-.dark-mode .friend-signature,
-.dark-mode .request-time,
+.dark-mode .friend-signature {
+  color: #aaa;
+}
+
+.dark-mode .friend-signature.empty {
+  color: #777;
+}
+
 .dark-mode .friend-email {
   color: #ccc;
 }
 
-.dark-mode .friend-signature.empty {
-  color: #999;
-}
-
 .dark-mode .friend-status {
-  background-color: #3d3d3d;
-  color: #ccc;
+  background-color: #333;
+  color: #f5f5f5;
 }
 
 .dark-mode .friend-status.online {
-  background-color: #335a33;
+  background-color: #2d552d;
   color: #a5d6a7;
 }
 
-.dark-mode .action-button {
-  border: none;
+.dark-mode .request-status {
+  color: #aaa;
 }
 
-.dark-mode .action-button:hover {
-  opacity: 0.9;
-  transform: scale(1.05);
+.dark-mode .dialog-content {
+  background-color: #2d2d2d;
+  color: #f5f5f5;
+}
+
+.dark-mode .dialog-header {
+  border-bottom: 1px solid #444;
+}
+
+.dark-mode .dialog-header h3 {
+  color: #f5f5f5;
+}
+
+.dark-mode .form-group label {
+  color: #f5f5f5;
+}
+
+.dark-mode .form-input {
+  background-color: #3d3d3d;
+  border-color: #555;
+  color: #f5f5f5;
+}
+
+.dark-mode .form-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.dark-mode .dialog-footer {
+  border-top: 1px solid #444;
+}
+
+.dark-mode .cancel-button {
+  background: #3d3d3d;
+  border-color: #555;
+  color: #ccc;
+}
+
+.dark-mode .cancel-button:hover {
+  background: #4d4d4d;
+}
+
+.dark-mode .save-button {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
+}
+
+.dark-mode .save-button:hover {
+  background: #5a6fd8;
+}
+
+.remark-count {
+  text-align: right;
+  font-size: 12px;
+  color: #999;
+  margin-top: 5px;
 }
 </style>

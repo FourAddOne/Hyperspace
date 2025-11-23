@@ -1,39 +1,36 @@
 package com.lihuahua.hyperspace.server;
 
-import com.lihuahua.hyperspace.models.vo.*;
+import com.lihuahua.hyperspace.models.entity.User;
+import com.lihuahua.hyperspace.models.entity.UserSettings;
+import com.lihuahua.hyperspace.models.vo.UserLoginVO;
+import com.lihuahua.hyperspace.models.vo.UserSettingsVO;
+
 import java.util.List;
 import java.util.Map;
 
 public interface UserServer {
-    
-    // 登录
-    AuthVO login(Map<String, String> credential);
-    
-    // 注册
+
+    UserLoginVO login(Map<String, String> credential);
+
     Boolean register(Map<String, String> credential);
-    
-    // 登出
+
     Boolean logout(String userId);
-    
-    // 获取用户信息
-    UserProfileVO getUserInfo(String userId);
-    
-    // 更新头像
+
+    UserLoginVO getUserInfo(String userId);
+
     Boolean updateAvatar(String userId, String newAvatarUrl);
     
-    // 获取用户设置
     UserSettingsVO getUserSettings(String userId);
     
-    // 保存用户设置
-    Boolean saveUserSettings(UserSettingsVO userSettingsVO);
-    
-    // 搜索用户（不包含屏蔽的用户）
-    List<UserBasicVO> searchUsers(String keyword, String userId);
+    Boolean saveUserSettings(UserSettingsVO userSettings);
     
     // 搜索用户
-    List<UserBasicVO> searchUsers(String keyword);
+    List<UserLoginVO> searchUsers(String keyword);
     
-    // 检查是否为好友
+    // 搜索用户（排除指定用户）
+    List<UserLoginVO> searchUsers(String keyword, String excludeUserId);
+    
+    // 检查用户是否为好友
     boolean isFriend(String userId, String friendId);
     
     // 更新用户在线状态
