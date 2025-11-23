@@ -3,23 +3,25 @@ package com.lihuahua.hyperspace.config;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
-import com.lihuahua.hyperspace.utils.OssProperties;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class OssConfig {
 
-    @Autowired
-    private OssProperties ossProperties;
+    // 从配置文件注入参数
+    @Value("${aliyun.oss.endpoint}")
+    private String endpoint;
+
+    @Value("${aliyun.oss.accessKeyId}")
+    private String accessKeyId;
+
+    @Value("${aliyun.oss.accessKeySecret}")
+    private String accessKeySecret;
 
     @Bean
     public OSS OssClient() {
-        return new OSSClientBuilder().build(
-            ossProperties.getEndpoint(),
-            ossProperties.getAccessKeyId(),
-            ossProperties.getAccessKeySecret()
-        );
+        return new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
     }
 }

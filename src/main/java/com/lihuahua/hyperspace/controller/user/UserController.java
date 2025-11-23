@@ -1,8 +1,7 @@
 package com.lihuahua.hyperspace.controller.user;
 
 import com.lihuahua.hyperspace.models.vo.ResVO;
-import com.lihuahua.hyperspace.models.vo.UserBasicVO;
-import com.lihuahua.hyperspace.models.vo.UserProfileVO;
+import com.lihuahua.hyperspace.models.vo.UserLoginVO;
 import com.lihuahua.hyperspace.server.UserServer;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
 import jakarta.annotation.Resource;
@@ -25,7 +24,7 @@ public class UserController {
     
     // 搜索用户
     @GetMapping("/search")
-    public ResVO<List<UserBasicVO>> searchUsers(@RequestParam String keyword, HttpServletRequest request) {
+    public ResVO<List<UserLoginVO>> searchUsers(@RequestParam String keyword, HttpServletRequest request) {
         try {
             // 从请求属性中获取当前用户ID
             String currentUserId = (String) request.getAttribute("userId");
@@ -34,7 +33,7 @@ public class UserController {
                 currentUserId = JwtTokenUtil.getCurrentUserId();
             }
             
-            List<UserBasicVO> users = userServer.searchUsers(keyword, currentUserId);
+            List<UserLoginVO> users = userServer.searchUsers(keyword, currentUserId);
             return ResVO.success(users);
         } catch (Exception e) {
             return ResVO.fail(e.getMessage());
@@ -43,11 +42,11 @@ public class UserController {
 
     // 获取用户信息
     @GetMapping("/info")
-    public ResVO<UserProfileVO> getUserInfo(@RequestHeader("Authorization") String token) {
+    public ResVO<UserLoginVO> getUserInfo(@RequestHeader("Authorization") String token) {
         try {
             String userId = JwtTokenUtil.validateToken(token.replace("Bearer ", ""));
             if (userId != null) {
-                UserProfileVO userInfo = userServer.getUserInfo(userId);
+                UserLoginVO userInfo = userServer.getUserInfo(userId);
                 return ResVO.success(userInfo);
             }
             return ResVO.fail("无效的token");

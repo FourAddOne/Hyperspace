@@ -3,6 +3,7 @@ package com.lihuahua.hyperspace.controller.user;
 import com.lihuahua.hyperspace.models.vo.ResVO;
 import com.lihuahua.hyperspace.models.vo.UserSettingsVO;
 import com.lihuahua.hyperspace.server.UserServer;
+import com.lihuahua.hyperspace.utils.LocalFileUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -19,6 +20,9 @@ public class UserSettingsController {
     
     @Resource
     private UserServer userServer;
+    
+    @Resource
+    private LocalFileUtil localFileUtil;
     
     @Operation(summary = "获取用户设置")
     @GetMapping
@@ -40,7 +44,14 @@ public class UserSettingsController {
     @DeleteMapping("/background")
     public ResVO<Boolean> deleteBackgroundImage(@RequestAttribute("userId") String userId,
                                                @RequestParam("imageUrl") String imageUrl) {
-        // 由于项目不再使用本地文件上传，直接返回成功
-        return ResVO.success(true);
+        try {
+            // 删除本地文件
+            if (imageUrl != null && imageUrl.contains("/uploads/")) {
+                localFileUtil.deleteLocalFile(imageUrl);
+            }
+            return ResVO.success(true);
+        } catch (Exception e) {
+            return ResVO.fail("删除背景图片失败: " + e.getMessage());
+        }
     }
 }

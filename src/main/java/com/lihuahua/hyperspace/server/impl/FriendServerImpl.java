@@ -13,6 +13,7 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -39,14 +40,19 @@ public class FriendServerImpl implements FriendServer {
             throw new RuntimeException("好友请求已发送，请等待对方接受");
         }
         
-        // 创建好友请求记录 (用户向好友发送请求)
+        // 创建好友请求记录，确保较小的ID存储在userOne字段
         Friend friend = new Friend();
-        friend.setUserId(userId);
-        friend.setFriendId(friendId);
+        if (userId.compareTo(friendId) < 0) {
+            friend.setUserOne(userId);
+            friend.setUserSec(friendId);
+        } else {
+            friend.setUserOne(friendId);
+            friend.setUserSec(userId);
+        }
         friend.setStatus("PENDING");
         friend.setBlockStatus("NONE");
-        friend.setUserRemark("");
-        friend.setFriendRemark("");
+        friend.setUserOneRemark("");
+        friend.setUserSecRemark("");
         long currentTime = System.currentTimeMillis();
         friend.setCreatedAt(currentTime);
         friend.setUpdatedAt(currentTime);
@@ -57,32 +63,25 @@ public class FriendServerImpl implements FriendServer {
     
     @Override
     public boolean acceptFriendRequest(String userId, String requesterId) {
-        // 更新好友请求状态 (用户接受来自请求者的请求)
+        // 更新好友请求状态
         QueryWrapper<Friend> wrapper = new QueryWrapper<>();
-        wrapper.eq("user_id", requesterId).eq("friend_id", userId).eq("status", "PENDING");
+        // 确保正确的用户ID顺序
+        if (requesterId.compareTo(userId) < 0) {
+            wrapper.eq("user_one", requesterId).eq("user_sec", userId);
+        } else {
+            wrapper.eq("user_one", userId).eq("user_sec", requesterId);
+        }
+        wrapper.eq("status", "PENDING");
+        
         Friend friendRequest = friendMapper.selectOne(wrapper);
         
         if (friendRequest == null) {
             throw new RuntimeException("未找到好友请求");
         }
         
-        // 更新请求状态为已接受
         friendRequest.setStatus("ACCEPTED");
         friendRequest.setUpdatedAt(System.currentTimeMillis());
         friendMapper.update(friendRequest, wrapper);
-        
-        // 创建反向好友关系（好友到用户的关系）
-        Friend reverseFriend = new Friend();
-        reverseFriend.setUserId(userId);
-        reverseFriend.setFriendId(requesterId);
-        reverseFriend.setStatus("ACCEPTED");
-        reverseFriend.setBlockStatus("NONE");
-        reverseFriend.setUserRemark("");
-        reverseFriend.setFriendRemark("");
-        long currentTime = System.currentTimeMillis();
-        reverseFriend.setCreatedAt(currentTime);
-        reverseFriend.setUpdatedAt(currentTime);
-        friendMapper.insert(reverseFriend);
         
         return true;
     }
@@ -90,7 +89,14 @@ public class FriendServerImpl implements FriendServer {
     @Override
     public boolean rejectFriendRequest(String userId, String requesterId) {
         QueryWrapper<Friend> wrapper = new QueryWrapper<>();
-        wrapper.eq("user_id", requesterId).eq("friend_id", userId).eq("status", "PENDING");
+        // 确保正确的用户ID顺序
+        if (requesterId.compareTo(userId) < 0) {
+            wrapper.eq("user_one", requesterId).eq("user_sec", userId);
+        } else {
+            wrapper.eq("user_one", userId).eq("user_sec", requesterId);
+        }
+        wrapper.eq("status", "PENDING");
+        
         Friend friendRequest = friendMapper.selectOne(wrapper);
         
         if (friendRequest == null) {
@@ -103,16 +109,21 @@ public class FriendServerImpl implements FriendServer {
     
     @Override
     public List<UserLoginVO> getFriendList(String userId) {
-        // 查询用户的所有好友关系 (用户作为发起方)
+        // 查询用户作为userOne的所有好友关系
         QueryWrapper<Friend> wrapper1 = new QueryWrapper<>();
-        wrapper1.eq("user_id", userId).eq("status", "ACCEPTED");
-        List<Friend> friendsAsUser = friendMapper.selectList(wrapper1);
+        wrapper1.eq("user_one", userId).eq("status", "ACCEPTED");
+        List<Friend> friendsAsUserOne = friendMapper.selectList(wrapper1);
+        
+        // 查询用户作为userSec的所有好友关系
+        QueryWrapper<Friend> wrapper2 = new QueryWrapper<>();
+        wrapper2.eq("user_sec", userId).eq("status", "ACCEPTED");
+        List<Friend> friendsAsUserSec = friendMapper.selectList(wrapper2);
         
         List<UserLoginVO> friendList = new ArrayList<>();
         
-        // 处理用户的好友关系
-        for (Friend friend : friendsAsUser) {
-            User user = userMapper.selectById(friend.getFriendId());
+        // 处理用户作为userOne的好友关系
+        for (Friend friend : friendsAsUserOne) {
+            User user = userMapper.selectById(friend.getUserSec());
             if (user != null) {
                 UserLoginVO userLoginVO = UserLoginVO.builder()
                         .userId(user.getUserId())
@@ -125,7 +136,7 @@ public class FriendServerImpl implements FriendServer {
                 
                 // 获取好友的个人签名
                 QueryWrapper<UserSettings> settingsWrapper = new QueryWrapper<>();
-                settingsWrapper.eq("user_id", friend.getFriendId());
+                settingsWrapper.eq("user_id", friend.getUserSec());
                 UserSettings userSettings = userSettingsMapper.selectOne(settingsWrapper);
                 if (userSettings != null && userSettings.getPersonalSignature() != null && !userSettings.getPersonalSignature().isEmpty()) {
                     // 限制签名长度为30个字符，超过则截断并添加省略号
@@ -137,8 +148,43 @@ public class FriendServerImpl implements FriendServer {
                 }
                 
                 // 添加备注名（如果存在）
-                if (friend.getUserRemark() != null && !friend.getUserRemark().isEmpty()) {
-                    userLoginVO.setUserName(friend.getUserRemark());
+                if (friend.getUserOneRemark() != null && !friend.getUserOneRemark().isEmpty()) {
+                    userLoginVO.setUserName(friend.getUserOneRemark());
+                }
+                
+                friendList.add(userLoginVO);
+            }
+        }
+        
+        // 处理用户作为userSec的好友关系
+        for (Friend friend : friendsAsUserSec) {
+            User user = userMapper.selectById(friend.getUserOne());
+            if (user != null) {
+                UserLoginVO userLoginVO = UserLoginVO.builder()
+                        .userId(user.getUserId())
+                        .userName(user.getUserName())
+                        .email(user.getEmail())
+                        .avatarUrl(user.getAvatarUrl())
+                        .Ip(user.getLoginIp())
+                        .loginStatus(user.getLoginStatus())
+                        .build();
+                
+                // 获取好友的个人签名
+                QueryWrapper<UserSettings> settingsWrapper = new QueryWrapper<>();
+                settingsWrapper.eq("user_id", friend.getUserOne());
+                UserSettings userSettings = userSettingsMapper.selectOne(settingsWrapper);
+                if (userSettings != null && userSettings.getPersonalSignature() != null && !userSettings.getPersonalSignature().isEmpty()) {
+                    // 限制签名长度为30个字符，超过则截断并添加省略号
+                    String signature = userSettings.getPersonalSignature();
+                    if (signature.length() > 30) {
+                        signature = signature.substring(0, 30) + "...";
+                    }
+                    userLoginVO.setPersonalSignature(signature);
+                }
+                
+                // 添加备注名（如果存在）
+                if (friend.getUserSecRemark() != null && !friend.getUserSecRemark().isEmpty()) {
+                    userLoginVO.setUserName(friend.getUserSecRemark());
                 }
                 
                 friendList.add(userLoginVO);
@@ -150,16 +196,36 @@ public class FriendServerImpl implements FriendServer {
     
     @Override
     public List<UserLoginVO> getFriendRequests(String userId) {
-        // 查询发送给用户的所有待处理好友请求
-        QueryWrapper<Friend> wrapper = new QueryWrapper<>();
-        wrapper.eq("friend_id", userId).eq("status", "PENDING");
-        List<Friend> requests = friendMapper.selectList(wrapper);
+        // 查询用户作为userSec的所有待处理好友请求（即别人发送给用户的好友请求）
+        QueryWrapper<Friend> wrapper1 = new QueryWrapper<>();
+        wrapper1.eq("user_sec", userId).eq("status", "PENDING");
+        List<Friend> requests1 = friendMapper.selectList(wrapper1);
+        
+        // 查询用户作为userOne的所有待处理好友请求（即别人发送给用户的好友请求）
+        QueryWrapper<Friend> wrapper2 = new QueryWrapper<>();
+        wrapper2.eq("user_one", userId).eq("status", "PENDING");
+        List<Friend> requests2 = friendMapper.selectList(wrapper2);
         
         List<UserLoginVO> requestList = new ArrayList<>();
         
-        // 处理好友请求
-        for (Friend request : requests) {
-            User user = userMapper.selectById(request.getUserId());
+        // 处理用户作为userSec的好友请求（userId > requesterId的情况）
+        for (Friend request : requests1) {
+            User user = userMapper.selectById(request.getUserOne());
+            if (user != null) {
+                UserLoginVO userLoginVO = UserLoginVO.builder()
+                        .userId(user.getUserId())
+                        .userName(user.getUserName())
+                        .email(user.getEmail())
+                        .avatarUrl(user.getAvatarUrl())
+                        .Ip(user.getLoginIp())
+                        .build();
+                requestList.add(userLoginVO);
+            }
+        }
+        
+        // 处理用户作为userOne的好友请求（userId < requesterId的情况）
+        for (Friend request : requests2) {
+            User user = userMapper.selectById(request.getUserSec());
             if (user != null) {
                 UserLoginVO userLoginVO = UserLoginVO.builder()
                         .userId(user.getUserId())
@@ -177,14 +243,14 @@ public class FriendServerImpl implements FriendServer {
     
     @Override
     public boolean deleteFriend(String userId, String friendId) {
-        // 删除好友关系 (两个方向)
-        QueryWrapper<Friend> wrapper1 = new QueryWrapper<>();
-        wrapper1.eq("user_id", userId).eq("friend_id", friendId);
-        friendMapper.delete(wrapper1);
-        
-        QueryWrapper<Friend> wrapper2 = new QueryWrapper<>();
-        wrapper2.eq("user_id", friendId).eq("friend_id", userId);
-        friendMapper.delete(wrapper2);
+        // 删除好友关系
+        QueryWrapper<Friend> wrapper = new QueryWrapper<>();
+        if (userId.compareTo(friendId) < 0) {
+            wrapper.eq("user_one", userId).eq("user_sec", friendId);
+        } else {
+            wrapper.eq("user_one", friendId).eq("user_sec", userId);
+        }
+        friendMapper.delete(wrapper);
         
         return true;
     }
@@ -199,18 +265,19 @@ public class FriendServerImpl implements FriendServer {
         QueryWrapper<Friend> wrapper = new QueryWrapper<>();
         Friend friend;
         
-        // 查找用户作为发起方的关系
-        wrapper.eq("user_id", userId).eq("friend_id", friendId);
-        friend = friendMapper.selectOne(wrapper);
-        if (friend != null) {
-            friend.setUserRemark(remark);
-        } else {
-            // 查找用户作为接收方的关系
-            wrapper.clear();
-            wrapper.eq("user_id", friendId).eq("friend_id", userId);
+        if (userId.compareTo(friendId) < 0) {
+            // userId是userOne
+            wrapper.eq("user_one", userId).eq("user_sec", friendId);
             friend = friendMapper.selectOne(wrapper);
             if (friend != null) {
-                friend.setFriendRemark(remark);
+                friend.setUserOneRemark(remark);
+            }
+        } else {
+            // userId是userSec
+            wrapper.eq("user_one", friendId).eq("user_sec", userId);
+            friend = friendMapper.selectOne(wrapper);
+            if (friend != null) {
+                friend.setUserSecRemark(remark);
             }
         }
         

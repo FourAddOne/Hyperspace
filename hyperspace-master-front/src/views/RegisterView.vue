@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '../services/api'
 import { saveToken } from '../utils/auth'
@@ -11,7 +11,7 @@ const router = useRouter()
 
 // 表单数据
 const registerForm = ref({
-  userName: '',
+  username: '',
   email: '',
   password: '',
   confirmPassword: ''
@@ -39,20 +39,10 @@ const showPopupMessage = (message: string, type: string) => {
   }, 3000)
 }
 
-onMounted(() => {
-  // 添加登录页面的CSS类以显示背景
-  document.body.classList.add('login-page')
-})
-
-onUnmounted(() => {
-  // 组件销毁时移除CSS类
-  document.body.classList.remove('login-page')
-})
-
 // 注册方法
 const handleRegister = async () => {
   // 表单验证
-  if (!registerForm.value.userName) {
+  if (!registerForm.value.username) {
     showPopupMessage('请输入用户名', 'error')
     return
   }
@@ -86,7 +76,7 @@ const handleRegister = async () => {
     
     // 使用封装好的API客户端发送注册请求
     const response = await apiClient.post(API_ENDPOINTS.USER_REGISTER, {
-      userName: registerForm.value.userName,
+      userName: registerForm.value.username,
       email: registerForm.value.email,
       password: registerForm.value.password,
       ip: userIP || '' // 如果获取不到IP，则传递空字符串
@@ -105,10 +95,10 @@ const handleRegister = async () => {
     }
     
     // 从响应中获取token和用户信息
-    const { accessToken, refreshToken, userId, userName, email, avatarUrl, Ip } = response.data
+    const { accessToken, userId, userName, email, avatarUrl, Ip } = response.data
 
     // 保存token到localStorage
-    saveToken(accessToken, refreshToken)
+    saveToken(accessToken)
     
     // 保存用户信息到localStorage
     saveUserInfo({ userId, userName, email, avatarUrl, Ip })
@@ -149,14 +139,6 @@ const handleRegister = async () => {
     loading.value = false
   }
 }
-
-// 监听路由变化，确保正确添加背景类
-router.afterEach((to, from) => {
-  // 如果进入注册页面，确保添加背景类
-  if (to.name === 'register') {
-    document.body.classList.add('login-page')
-  }
-})
 </script>
 
 <template>
@@ -172,7 +154,7 @@ router.afterEach((to, from) => {
           <label for="username">用户名</label>
           <input 
             id="username"
-            v-model="registerForm.userName" 
+            v-model="registerForm.username" 
             type="text" 
             placeholder="请输入用户名" 
             class="form-input"

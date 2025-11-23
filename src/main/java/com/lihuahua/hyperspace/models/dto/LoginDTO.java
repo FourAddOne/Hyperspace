@@ -18,6 +18,6 @@ public class LoginDTO {
     @Parameter(name = "密码",description = "用户密码,注销时可不传")
     private String password;
     @Schema(description = "IP地址")
-    private String ip; // 修复字段名，从前端传来的应该是 "ip" 而不是 "Ip"
+    private String Ip;
 
 }
