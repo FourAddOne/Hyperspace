@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed, onUnmounted, watch, reactive, onActivated } from 'vue'
+import { ref, onMounted, nextTick, computed, onUnmounted, watch, reactive, onActivated, watchEffect } from 'vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '../services/api'
 import { useRoute } from 'vue-router'
 import { getFullAvatarUrl, getUserInfo } from '../utils/user'
 import globalWebSocketManager from '../services/globalWebSocketManager'
+import { useUserStore } from '../stores/userStore'
 
 // 获取路由实例
 const route = useRoute()
@@ -17,6 +18,9 @@ const newMessage = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 const unreadCounts = ref<Map<string, number>>(new Map()) // 添加未读消息计数
 const unreadRefreshInterval = ref<number | null>(null) // 定时刷新未读消息的interval ID
+
+// 获取用户store
+const userStore = useUserStore()
 
 // 背景设置
 const backgroundSettings = ref({
@@ -104,7 +108,15 @@ const formatDate = (date: string) => {
   return `${messageDate.getFullYear()}年${messageDate.getMonth() + 1}月${messageDate.getDate()}日`;
 }
 
-
+// 监听暗色模式变化并应用到DOM
+watch(() => userStore.getDarkMode, (newDarkMode) => {
+  document.body.classList.toggle('dark-mode', newDarkMode);
+  
+  // 在亮色模式下清除body的背景图片
+  if (!newDarkMode) {
+    document.body.style.backgroundImage = 'none';
+  }
+})
 
 // 更新背景设置
 const updateBackgroundSettings = () => {
@@ -122,17 +134,15 @@ const updateBackgroundSettings = () => {
   } else {
     backgroundSettings.value.backgroundOpacity = 100
   }
+  
+  // 更新store中的背景状态
+  userStore.setHasBackground(!!savedBackgroundImage)
 }
 
 // 添加处理暗色模式变化事件
 const handleDarkModeChanged = (e: CustomEvent) => {
   const detail = e.detail as { darkMode: boolean };
-  document.body.classList.toggle('dark-mode', detail.darkMode);
-  
-  // 在亮色模式下清除body的背景图片
-  if (!detail.darkMode) {
-    document.body.style.backgroundImage = 'none';
-  }
+  userStore.setDarkMode(detail.darkMode);
 };
 
 // 处理背景透明度变化事件
@@ -145,6 +155,8 @@ const handleBackgroundOpacityChanged = (e: CustomEvent) => {
 const handleBackgroundImageChanged = (e: CustomEvent) => {
   const detail = e.detail as { backgroundImage: string };
   backgroundSettings.value.backgroundImage = detail.backgroundImage;
+  // 更新store中的背景状态
+  userStore.setHasBackground(!!detail.backgroundImage);
 };
 
 // 处理存储变化事件

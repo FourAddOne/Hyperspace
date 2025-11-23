@@ -42,12 +42,14 @@ const logout = () => {
       removeToken()
       
       ElMessage.success('已退出登录')
+      // 确保登录页面显示背景
       router.push('/login')
     } catch (error) {
       console.error('登出失败:', error)
       // 即使后端登出失败，也要清除本地状态以确保用户能退出
       userStore.clearUserInfo()
       removeToken()
+      // 确保登录页面显示背景
       router.push('/login')
     }
   }).catch(() => {
@@ -245,39 +247,32 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 0;
+  padding: 15px 0;
   cursor: pointer;
   color: #666;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
 }
 
 .nav-menu li:hover {
-  background-color: #f1f1f1;
+  background-color: #f0f0f0;
+  color: #333;
 }
 
 .nav-menu li.active {
-  background-color: #e0e0e0;
-  color: #0084ff;
-}
-
-.nav-menu li.active .nav-icon {
+  background-color: #e0f0ff;
   color: #0084ff;
 }
 
 .nav-icon {
+  width: 24px;
+  height: 24px;
   margin-bottom: 4px;
-  width: 30px;  /* 设置图标宽度 */
-  height: 30px; /* 设置图标高度 */
-}
-
-.nav-menu li span {
-  font-size: 16px; /* 从12px缩小到10px */
 }
 
 .sidebar-footer {
   padding: 15px 0;
-  border-top: 1px solid #e0e0e0;
   width: 100%;
+  border-top: 1px solid #e0e0e0;
 }
 
 .logout-btn {
@@ -288,56 +283,45 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
   border: none;
   color: #666;
   cursor: pointer;
-  font-size: 12px;
   width: 100%;
+  padding: 10px 0;
+  transition: all 0.3s ease;
 }
 
 .logout-btn:hover {
-  background-color: #f1f1f1;
+  background-color: #f0f0f0;
+  color: #333;
 }
 
-.logout-btn .nav-icon {
-  margin-bottom: 4px;
-  width: 30px;  /* 设置图标宽度 */
-  height: 30px; /* 设置图标高度 */
-}
-</style>
-
-<!-- 使用非scoped样式来处理暗色模式 -->
-<style>
 /* 暗色模式样式 */
 .dark-mode .sidebar {
-  background-color: #1a1a1a;
+  background-color: #2d2d2d;
   border-right: 1px solid #444;
-  color: #f5f5f5;
 }
 
-.dark-mode .sidebar .user-profile-header {
+.dark-mode .user-profile-header {
   border-bottom: 1px solid #444;
 }
 
-.dark-mode .sidebar .username {
+.dark-mode .username {
   color: #f5f5f5;
 }
 
-.dark-mode .sidebar .nav-menu li {
+.dark-mode .nav-menu li {
   color: #ccc;
 }
 
-.dark-mode .sidebar .nav-menu li:hover {
+.dark-mode .nav-menu li:hover {
   background-color: #3d3d3d;
+  color: #f5f5f5;
 }
 
-.dark-mode .sidebar .nav-menu li.active {
-  background-color: #3d3d3d;
+.dark-mode .nav-menu li.active {
+  background-color: #1a3a4a;
   color: #409eff;
 }
 
-.dark-mode .sidebar .nav-menu li.active .nav-icon {
-  color: #409eff;
-}
-
-.dark-mode .sidebar .sidebar-footer {
+.dark-mode .sidebar-footer {
   border-top: 1px solid #444;
 }
 
@@ -347,5 +331,6 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
 
 .dark-mode .logout-btn:hover {
   background-color: #3d3d3d;
+  color: #f5f5f5;
 }
 </style>

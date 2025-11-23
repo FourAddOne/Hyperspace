@@ -1,7 +1,6 @@
 package com.lihuahua.hyperspace.controller.file;
 
 import com.lihuahua.hyperspace.models.vo.ResVO;
-import com.lihuahua.hyperspace.utils.LocalFileUtil;
 import com.lihuahua.hyperspace.utils.OssProperties;
 import com.lihuahua.hyperspace.utils.OssUtil;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,9 +20,6 @@ import java.io.IOException;
 public class FileUploadController {
     
     @Resource
-    private LocalFileUtil localFileUtil;
-
-    @Resource
     private OssUtil ossUtil;
 
     @Autowired
@@ -32,34 +28,27 @@ public class FileUploadController {
     @Operation(summary = "上传文件")
     @PostMapping("/upload")
     public ResVO<String> uploadFile(@RequestParam("file") MultipartFile file,
-                                   @RequestParam(required = false, defaultValue = "oss") String uploadMode,
-                                   @RequestParam(required = false, defaultValue = "other") String fileType) {
+                                   @RequestParam(value = "fileType", required = false, defaultValue = "other") String fileType) {
         try {
-            log.info("开始文件上传: 文件名={}, 文件大小={} bytes, 上传模式={}, 文件类型={}",
-                    file.getOriginalFilename(), file.getSize(), uploadMode, fileType);
+            log.info("开始文件上传: 文件名={}, 文件大小={} bytes, 文件类型={}",
+                    file.getOriginalFilename(), file.getSize(), fileType);
             
+            // 使用OSS上传（云端）
+            log.info("使用OSS上传");
+            String filePath = ossUtil.uploadFileToOSS(file, fileType);
+            log.info("文件在OSS中的路径: {}", filePath);
+            // 对于头像和背景图片，使用公开URL；其他文件使用公开URL（解决预签名URL过期问题）
+            log.info("检查文件类型: '{}' 是否为头像或背景", fileType);
             String fileUrl;
-            if ("oss".equals(uploadMode)) {
-                // 使用OSS上传（云端）
-                log.info("使用OSS上传");
-                String filePath = ossUtil.uploadFileToOSS(file, fileType);
-                log.info("文件在OSS中的路径: {}", filePath);
-                // 对于头像和背景图片，使用公开URL；其他文件使用预签名URL
-                log.info("检查文件类型: '{}' 是否为头像或背景", fileType);
-                if ("avatar".equals(fileType) || "background".equals(fileType)) {
-                    log.info("生成公开URL");
-                    fileUrl = ossUtil.generatePublicUrl(filePath);
-                } else {
-                    log.info("生成预签名URL");
-                    fileUrl = ossUtil.generatePresignedUrl(filePath, 3600); // 1小时有效期
-                }
-                log.info("生成的公开URL: {}", fileUrl);
+            if ("avatar".equals(fileType) || "background".equals(fileType)) {
+                log.info("生成公开URL");
+                fileUrl = ossUtil.generatePublicUrl(filePath);
             } else {
-                // 使用本地上传
-                log.info("使用本地上传");
-                fileUrl = localFileUtil.uploadLocalFile(file);
-                log.info("本地上传完成，文件URL: {}", fileUrl);
+                // 修改：对于其他文件类型也使用公开URL，避免预签名URL过期问题
+                log.info("生成公开URL（替代预签名URL）");
+                fileUrl = ossUtil.generatePublicUrl(filePath);
             }
+            log.info("生成的公开URL: {}", fileUrl);
             log.info("文件上传成功，URL: {}", fileUrl);
             return ResVO.success(fileUrl);
         } catch (IOException e) {
@@ -75,16 +64,8 @@ public class FileUploadController {
     @DeleteMapping("/delete")
     public ResVO<Boolean> deleteFile(@RequestParam("fileUrl") String fileUrl) {
         try {
-            boolean result = false;
-            if (fileUrl.contains("oss") || fileUrl.contains("aliyuncs.com")) {
-                // 删除OSS中的文件
-                result = ossUtil.deleteFileFromOSS(fileUrl);
-            } else if (fileUrl.startsWith("/uploads/")) {
-                // 删除本地文件
-                result = localFileUtil.deleteLocalFile(fileUrl);
-            } else {
-                return ResVO.fail("不支持删除该类型的文件");
-            }
+            // 删除OSS中的文件
+            boolean result = ossUtil.deleteFileFromOSS(fileUrl);
             
             if (result) {
                 System.out.println("文件删除成功: " + fileUrl);

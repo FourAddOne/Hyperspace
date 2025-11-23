@@ -10,7 +10,6 @@ import com.lihuahua.hyperspace.models.vo.*;
 import com.lihuahua.hyperspace.server.UserServer;
 import com.lihuahua.hyperspace.utils.IdUtil;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
-import com.lihuahua.hyperspace.utils.LocalFileUtil;
 import com.lihuahua.hyperspace.utils.OssProperties;
 import com.lihuahua.hyperspace.utils.OssUtil;
 import jakarta.annotation.Resource;
@@ -29,9 +28,6 @@ public class UserServerImpl implements UserServer {
     
     @Resource
     private UserSettingsMapper userSettingsMapper;
-    
-    @Resource
-    private LocalFileUtil localFileUtil;
     
     @Resource
     private OssUtil ossUtil;
@@ -129,7 +125,7 @@ public class UserServerImpl implements UserServer {
         // 创建新用户
         User newUser = new User();
         newUser.setUserId(generateUniqueUserId()); // 生成唯一用户ID
-        newUser.setUserName(username);
+         newUser.setUserName(username); // 确保设置了用户名
         newUser.setEmail(email);
         newUser.setRegisterIp(ip);
         newUser.setLoginIp(ip);
@@ -209,12 +205,9 @@ public class UserServerImpl implements UserServer {
             String oldAvatarUrl = user.getAvatarUrl();
             if (oldAvatarUrl != null && !oldAvatarUrl.isEmpty()) {
                 try {
-                    // 如果是本地文件，使用本地删除方法
-                    if (oldAvatarUrl.startsWith("/uploads/")) {
-                        localFileUtil.deleteLocalFile(oldAvatarUrl);
-                    }
                     // 如果是OSS文件，调用OSS删除方法
-                    else if (oldAvatarUrl.contains("oss") || oldAvatarUrl.contains("aliyuncs.com")) {
+                    if (oldAvatarUrl.contains("oss") || oldAvatarUrl.contains("aliyuncs.com") || 
+                        (oldAvatarUrl.startsWith("avatars/") || oldAvatarUrl.startsWith("backgrounds/") || oldAvatarUrl.startsWith("uploads/"))) {
                         ossUtil.deleteFileFromOSS(oldAvatarUrl);
                     }
                 } catch (Exception e) {
@@ -222,8 +215,14 @@ public class UserServerImpl implements UserServer {
                 }
             }
             
+            // 如果新头像URL是完整URL，提取相对路径存储到数据库
+            String avatarUrlToSave = newAvatarUrl;
+            if (newAvatarUrl != null && newAvatarUrl.startsWith("http") && newAvatarUrl.contains(ossProperties.getBucketName())) {
+                avatarUrlToSave = ossUtil.extractObjectNameFromUrl(newAvatarUrl);
+            }
+            
             // 更新用户头像URL
-            user.setAvatarUrl(newAvatarUrl);
+            user.setAvatarUrl(avatarUrlToSave);
             user.setUpdatedAt(new Date());
             userMapper.updateById(user);
             return true;
@@ -297,39 +296,47 @@ public class UserServerImpl implements UserServer {
             // 检查背景图片是否发生变化，如果变化则删除旧的背景图片
             if (existingSettings.getBackgroundImage() != null && 
                 userSettingsVO.getBackgroundImage() != null &&
-                !existingSettings.getBackgroundImage().equals(userSettingsVO.getBackgroundImage()) &&
                 !existingSettings.getBackgroundImage().isEmpty() &&
                 !userSettingsVO.getBackgroundImage().isEmpty()) {
-                try {
-                    String oldBackgroundImage = existingSettings.getBackgroundImage();
-                    // 如果是本地文件，使用本地删除方法
-                    if (oldBackgroundImage.startsWith("/uploads/")) {
-                        localFileUtil.deleteLocalFile(oldBackgroundImage);
-                        System.out.println("已删除用户的旧背景图片: " + oldBackgroundImage);
-                    }
-                    // 如果是OSS文件，调用OSS删除方法
-                    else if (oldBackgroundImage.contains("oss") || oldBackgroundImage.contains("aliyuncs.com")) {
-                        // 实际删除OSS文件
-                        boolean deleted = ossUtil.deleteFileFromOSS(oldBackgroundImage);
-                        if (deleted) {
-                            System.out.println("已删除用户的旧OSS背景图片: " + oldBackgroundImage);
-                        } else {
-                            System.out.println("删除用户的旧OSS背景图片失败: " + oldBackgroundImage);
-                        }
-                    }
-                    // 如果是相对路径，说明是OSS文件
-                    else if (!oldBackgroundImage.startsWith("http")) {
-                        // 实际删除OSS文件
-                        boolean deleted = ossUtil.deleteFileFromOSS(oldBackgroundImage);
-                        if (deleted) {
-                            System.out.println("已删除用户的旧OSS背景图片: " + oldBackgroundImage);
-                        } else {
-                            System.out.println("删除用户的旧OSS背景图片失败: " + oldBackgroundImage);
-                        }
-                    }
-                } catch (Exception e) {
-                    System.out.println("删除用户的旧背景图片失败: " + existingSettings.getBackgroundImage() + ", 错误: " + e.getMessage());
+                
+                // 确保比较的是相同格式的URL（都转换为相对路径再比较）
+                String existingImagePath = existingSettings.getBackgroundImage();
+                String newImagePath = userSettingsVO.getBackgroundImage();
+                
+                // 如果现有图片是完整URL，提取相对路径
+                if (existingImagePath.startsWith("http")) {
+                    existingImagePath = ossUtil.extractObjectNameFromUrl(existingImagePath);
                 }
+                
+                // 如果新图片是完整URL，提取相对路径
+                if (newImagePath.startsWith("http") && newImagePath.contains(ossProperties.getBucketName())) {
+                    newImagePath = ossUtil.extractObjectNameFromUrl(newImagePath);
+                }
+                
+                // 只有在图片路径真正发生变化时才删除旧图片
+                if (!existingImagePath.equals(newImagePath)) {
+                    try {
+                        String oldBackgroundImage = existingSettings.getBackgroundImage();
+                        // 删除OSS文件
+                        if (oldBackgroundImage.contains("oss") || oldBackgroundImage.contains("aliyuncs.com") || 
+                            (oldBackgroundImage.startsWith("avatars/") || oldBackgroundImage.startsWith("backgrounds/") || oldBackgroundImage.startsWith("uploads/"))) {
+                            // 实际删除OSS文件
+                            boolean deleted = ossUtil.deleteFileFromOSS(oldBackgroundImage);
+                            if (deleted) {
+                                System.out.println("已删除用户的旧OSS背景图片: " + oldBackgroundImage);
+                            } else {
+                                System.out.println("删除用户的旧OSS背景图片失败: " + oldBackgroundImage);
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.out.println("删除用户的旧背景图片失败: " + existingSettings.getBackgroundImage() + ", 错误: " + e.getMessage());
+                    }
+                }
+            }
+            
+            // 如果背景图片URL是完整URL，提取相对路径存储到数据库
+            if (userSettings.getBackgroundImage() != null && userSettings.getBackgroundImage().startsWith("http") && userSettings.getBackgroundImage().contains(ossProperties.getBucketName())) {
+                userSettings.setBackgroundImage(ossUtil.extractObjectNameFromUrl(userSettings.getBackgroundImage()));
             }
             
             return userSettingsMapper.update(userSettings, wrapper) > 0;
@@ -418,14 +425,6 @@ public class UserServerImpl implements UserServer {
         
         return userBasicVOs;
     }
-    
-    @Override
-    public boolean isFriend(String userId, String friendId) {
-        // 这里应该调用FriendService来检查是否为好友
-        // 为了简化，暂时返回false
-        return false;
-    }
-    
     @Override
     public boolean updateUserStatus(String userId, boolean isOnline) {
         User user = userMapper.selectById(userId);

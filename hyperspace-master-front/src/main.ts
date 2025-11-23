@@ -35,6 +35,13 @@ router.beforeEach((to, from, next) => {
   // 检查用户是否已登录
   const isLoggedIn = !!getToken()
   
+  // 如果目标是登录或注册页面，确保添加背景类
+  if (to.name === 'login' || to.name === 'register') {
+    document.body.classList.add('login-page')
+  } else {
+    document.body.classList.remove('login-page')
+  }
+  
   if (requiresAuth && !isLoggedIn) {
     // 需要认证但未登录，跳转到登录页
     next({ name: 'login' })

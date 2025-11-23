@@ -33,7 +33,7 @@ public class loginController {
         credential.put("userId", loginUser.getUserId());
         credential.put("email", loginUser.getEmail());
         credential.put("password", loginUser.getPassword());
-        credential.put("ip", loginUser.getIp());
+        credential.put("ip", loginUser.getIp()); // 修复字段名
 
         try {
             AuthVO authVO = userServer.login(credential);
@@ -56,6 +56,7 @@ public class loginController {
             }
             return ResVO.success(resData);
         } catch (Exception e) {
+            e.printStackTrace(); // 添加错误日志
             return ResVO.fail(e.getMessage());
         }
     }

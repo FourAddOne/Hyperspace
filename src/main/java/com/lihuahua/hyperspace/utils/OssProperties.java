@@ -12,6 +12,12 @@ public class OssProperties {
     @Value("${aliyun.oss.endpoint}")
     private String endpoint;
     
+    @Value("${aliyun.oss.accessKeyId}")
+    private String accessKeyId;
+    
+    @Value("${aliyun.oss.accessKeySecret}")
+    private String accessKeySecret;
+    
     /**
      * 获取OSS的完整域名前缀
      * @return https://bucketName.endpoint/
@@ -34,5 +40,21 @@ public class OssProperties {
      */
     public String getEndpoint() {
         return endpoint;
+    }
+    
+    /**
+     * 获取accessKeyId
+     * @return accessKeyId
+     */
+    public String getAccessKeyId() {
+        return accessKeyId;
+    }
+    
+    /**
+     * 获取accessKeySecret
+     * @return accessKeySecret
+     */
+    public String getAccessKeySecret() {
+        return accessKeySecret;
     }
 }

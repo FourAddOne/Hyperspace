@@ -30,7 +30,7 @@ public class RegisterController {
     @PostMapping("/register")
     public ResVO<Map<String, Object>> register(@RequestBody RegisterDTO user) {
         Map<String, String> credential = new HashMap<>();
-        credential.put("username", user.getUserName());
+        credential.put("username", user.getUserName()); // 使用 userName 字段
         credential.put("password", user.getPassword());
         credential.put("email", user.getEmail());
         credential.put("ip", user.getIp());
@@ -47,8 +47,10 @@ public class RegisterController {
                 AuthVO authVO = userServer.login(loginCredential);
                 UserProfileVO userProfileVO = userServer.getUserInfo(authVO.getUserId());
                 
+                // 添加缺失的refreshToken
                 Map<String, Object> responseData = new HashMap<>();
                 responseData.put("accessToken", authVO.getAccessToken());
+                responseData.put("refreshToken", authVO.getRefreshToken()); // 添加refreshToken
                 responseData.put("userId", userProfileVO.getUserId());
                 responseData.put("userName", userProfileVO.getUserName());
                 responseData.put("email", userProfileVO.getEmail());
@@ -60,6 +62,7 @@ public class RegisterController {
                 return ResVO.fail("注册失败");
             }
         } catch (Exception e) {
+            e.printStackTrace(); // 添加错误日志
             return ResVO.fail(e.getMessage());
         }
     }

@@ -32,10 +32,7 @@ public interface UserServer {
     
     // 搜索用户
     List<UserBasicVO> searchUsers(String keyword);
-    
-    // 检查是否为好友
-    boolean isFriend(String userId, String friendId);
-    
+
     // 更新用户在线状态
     boolean updateUserStatus(String userId, boolean isOnline);
 }
