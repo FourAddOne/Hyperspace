@@ -1,0 +1,1 @@
+ALTER TABLE `message` MODIFY COLUMN `image_urls` VARCHAR(500) COMMENT '图片URL集合（JSON格式，如：["https://xxx/1.jpg"]，type=image时必填）';
