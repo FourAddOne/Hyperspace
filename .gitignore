@@ -31,6 +31,11 @@ build/
 !**/src/test/**/build/
 /uploads/
 
-
 ### VS Code ###
 .vscode/
+
+### Frontend ###
+/hyperspace-master-front/node_modules/
+/hyperspace-master-front/dist/
+/hyperspace-master-front/.env.local
+/hyperspace-master-front/.env.*.local

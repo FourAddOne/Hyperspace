@@ -1,12 +1,12 @@
-// 在 template 部分修改
 <template>
   <div class="group-view">
     <div class="group-container">
+      <!-- 左侧群聊列表 -->
       <div class="group-sidebar">
         <div class="group-sidebar-header">
           <h2>群聊</h2>
           <el-button type="primary" circle @click="createGroup">
-            <plus />
+            +
           </el-button>
         </div>
 
@@ -20,16 +20,16 @@
 
         <div class="groups-list">
           <div
-              v-for="group in filteredGroups"
-              :key="group.groupId"
+              v-for="group in mockGroups"
+              :key="group.id"
               class="group-item"
-              :class="{ active: selectedGroup?.groupId === group.groupId }"
+              :class="{ active: selectedGroup?.id === group.id }"
               @click="selectGroup(group)"
           >
             <el-avatar :icon="ChatLineSquare" />
             <div class="group-info">
-              <div class="group-name">{{ group.groupName }}</div>
-              <div class="group-description">创建于 {{ formatDate(group.createdAt) }}</div>
+              <div class="group-name">{{ group.name }}</div>
+              <div class="group-description">{{ group.description }}</div>
             </div>
             <div class="group-members">
               {{ group.memberCount }}人
@@ -38,198 +38,147 @@
         </div>
       </div>
 
-      <div class="group-main">
-        <div class="group-header" v-if="selectedGroup">
-          <div class="group-header-info">
+      <!-- 右侧聊天区域 -->
+      <div class="group-main" v-if="selectedGroup">
+        <div class="chat-header">
+          <div class="chat-header-info">
             <el-avatar :icon="ChatLineSquare" :size="40" />
-            <div class="group-header-text">
-              <div class="group-name-header">{{ selectedGroup.groupName }}</div>
+            <div class="chat-header-text">
+              <div class="group-name-header">{{ selectedGroup.name }}</div>
               <div class="group-member-count">{{ selectedGroup.memberCount }}名成员</div>
             </div>
           </div>
-          <div class="group-header-actions">
-            <el-button @click="enterGroupChat(selectedGroup.groupId)">进入聊天</el-button>
-            <el-button
-                v-if="selectedGroup.ownerId !== userStore.userId"
-                type="danger"
-                @click="quitGroup(selectedGroup.groupId)"
+        </div>
+
+        <div class="chat-content">
+          <div class="message-list">
+            <div
+                v-for="message in selectedGroup.messages"
+                :key="message.id"
+                class="message-item"
+                :class="{ 'is-self': message.userId === userStore.userId }"
             >
-              退出群组
-            </el-button>
+              <el-avatar
+                  :size="32"
+                  :class="{ 'message-avatar': true }"
+              />
+              <div class="message-content">
+                <div class="message-info">
+                  <span class="username">{{ message.userName }}</span>
+                  <span class="time">{{ message.time }}</span>
+                </div>
+                <div class="message-text">{{ message.content }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="message-input">
+            <el-input
+                v-model="currentMessage"
+                type="textarea"
+                :rows="3"
+                placeholder="输入消息..."
+                @keyup.ctrl.enter="sendMessage"
+            />
+            <el-button type="primary" @click="sendMessage">发送</el-button>
           </div>
         </div>
+      </div>
 
-        <div class="group-content" v-if="selectedGroup">
-          <div class="group-details">
-            <h3>群组信息</h3>
-            <div class="group-detail-item">
-              <span class="label">群组名称:</span>
-              <span>{{ selectedGroup.groupName }}</span>
-            </div>
-            <div class="group-detail-item">
-              <span class="label">创建时间:</span>
-              <span>{{ formatDate(selectedGroup.createdAt) }}</span>
-            </div>
-            <div class="group-detail-item">
-              <span class="label">成员数量:</span>
-              <span>{{ selectedGroup.memberCount }}人</span>
-            </div>
-            <div class="group-detail-item">
-              <span class="label">群主:</span>
-              <span>{{ selectedGroup.ownerId === userStore.userId ? '我' : selectedGroup.ownerId }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="group-placeholder" v-else>
-          <div class="placeholder-content">
-            <chat-line-square class="placeholder-icon" />
-            <p>选择一个群组或创建新群组</p>
-            <el-button type="primary" @click="createGroup">创建群组</el-button>
-          </div>
+      <!-- 未选择群组时的占位 -->
+      <div class="group-placeholder" v-else>
+        <div class="placeholder-content">
+          <chat-line-square class="placeholder-icon" />
+          <p>选择一个群组开始聊天</p>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { ChatLineSquare, Plus } from '@element-plus/icons-vue'
-import apiClient, { API_ENDPOINTS } from '../services/api'
-import { useUserStore } from '../stores/userStore'
+import { ref } from 'vue'
+import { ChatLineSquare } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/userStore'
 
-interface Group {
-  id: string
-  name: string
-  description: string
-  memberCount: number
-}
-
-const router = useRouter()
+// 用户store
 const userStore = useUserStore()
 
-// 群组数据
-const groups = ref<Group[]>([])
-const loading = ref(false)
-const selectedGroup = ref<Group | null>(null)
+// 状态管理
+const searchKeyword = ref('')
+const messages = ref<any[]>([])
+const currentMessage = ref('')
+const selectedGroup = ref(null)
 
-// 获取群组列表
-const fetchGroups = async () => {
-  loading.value = true
-  try {
-    const response = await apiClient.get('/api/groups/list', {
-      params: {
-        userId: userStore.userId
-      }
-    })
-    groups.value = response.data
-  } catch (error) {
-    ElMessage.error('获取群组列表失败')
-    console.error('获取群组列表失败:', error)
-  } finally {
-    loading.value = false
+// 模拟本地数据
+const mockGroups = ref([
+  {
+    id: '1',
+    name: '群qqqq',
+    description: 'aaaa',
+    memberCount: 25,
+    messages: [
+      { id: 1, userId: '1', userName: '张三', content: '大家好！', time: '10:00' },
+      { id: 2, userId: '2', userName: '李四', content: '你好！', time: '10:01' }
+    ]
+  },
+  {
+    id: '2',
+    name: 'Vue',
+    description: 'Vue.js',
+    memberCount: 30,
+    messages: [
+      { id: 1, userId: '3', userName: '王五', content: 'Vue3好用吗？', time: '11:00' }
+    ]
   }
+])
+
+// 方法
+const createGroup = () => {
+  // 创建群组逻辑
 }
 
-// 选择群组
-const selectGroup = (group: Group) => {
+const searchGroups = () => {
+  // 搜索群组逻辑
+}
+
+const selectGroup = (group) => {
   selectedGroup.value = group
 }
 
-const createGroup = async () => {
-  try {
-    const response = await apiClient.post('/api/groups/create', {
-      groupName: '新群组',
-      ownerId: userStore.userId
-    })
-    if (response.code === 200) {
-      ElMessage.success('创建群组成功')
-      await fetchGroups() // 刷新群组列表
-    }
-  } catch (error) {
-    ElMessage.error('创建群组失败')
-    console.error('创建群组失败:', error)
-  }
-}
-// 加入群组
-const joinGroup = async (groupId: string) => {
-  try {
-    const response = await apiClient.post('/api/groups/join', null, {
-      params: {
-        groupId,
-        userId: userStore.userId
-      }
-    })
-    if (response.code === 200) {
-      ElMessage.success('加入群组成功')
-      await fetchGroups() // 刷新群组列表
-    }
-  } catch (error) {
-    ElMessage.error('加入群组失败')
-    console.error('加入群组失败:', error)
-  }
-}
-// 退出群组
-const quitGroup = async (groupId: string) => {
-  try {
-    const response = await apiClient.post('/api/groups/quit', null, {
-      params: {
-        groupId,
-        userId: userStore.userId
-      }
-    })
-    if (response.code === 200) {
-      ElMessage.success('退出群组成功')
-      await fetchGroups() // 刷新群组列表
-      selectedGroup.value = null // 清除选中状态
-    }
-  } catch (error) {
-    ElMessage.error('退出群组失败')
-    console.error('退出群组失败:', error)
-  }
-}
-// 获取群组成员
-const getGroupMembers = async (groupId: string) => {
-  try {
-    const response = await apiClient.get('/api/groups/members', {
-      params: {
-        groupId
-      }
-    })
-    return response.data
-  } catch (error) {
-    ElMessage.error('获取群组成员失败')
-    console.error('获取群组成员失败:', error)
-    return []
-  }
-}
-// 进入群组聊天
-const enterGroupChat = (groupId: string) => {
-  router.push(`/group/${groupId}/chat`)
-}
+const sendMessage = () => {
+  if (!currentMessage.value.trim() || !selectedGroup.value) return
 
-onMounted(() => {
-  fetchGroups()
-})
+  const newMessage = {
+    id: Date.now(),
+    userId: userStore.userId,
+    userName: userStore.userName,
+    content: currentMessage.value,
+    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  selectedGroup.value.messages.push(newMessage)
+  currentMessage.value = ''
+}
 </script>
 
-<style scoped>
+<style>
 .group-view {
   height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  background-color: var(--background-color);
-  color: var(--text-color);
+  background-color: #f5f5f5;
 }
 
 .group-container {
   display: flex;
-  flex: 1;
-  min-height: 0;
+  height: 100%;
+  background-color: #ffffff;
+}
+
+.dark-mode .group-container {
+  background-color: #1a1a1a;
 }
 
 .group-sidebar {
@@ -242,35 +191,28 @@ onMounted(() => {
 
 .dark-mode .group-sidebar {
   border-right: 1px solid #444;
-  background-color: #1a1a1a;
+  background-color: #2d2d2d;
 }
 
 .group-sidebar-header {
+  padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #ddd;
-  background-color: #ffffff;
+  border-bottom: 1px solid #eee;
 }
 
 .dark-mode .group-sidebar-header {
   border-bottom: 1px solid #444;
-  background-color: #2d2d2d;
-}
-
-.group-sidebar-header h2 {
-  margin: 0;
-  font-size: 18px;
-  color: #1a1a1a;
-}
-
-.dark-mode .group-sidebar-header h2 {
-  color: #f5f5f5;
 }
 
 .search-box {
-  padding: 15px;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.dark-mode .search-box {
+  border-bottom: 1px solid #444;
 }
 
 .groups-list {
@@ -279,169 +221,179 @@ onMounted(() => {
 }
 
 .group-item {
+  padding: 15px;
   display: flex;
   align-items: center;
-  padding: 15px 20px;
   cursor: pointer;
-  position: relative;
-  border-bottom: 1px solid #eee;
-  background-color: #ffffff;
-}
-
-.dark-mode .group-item {
-  border-bottom: 1px solid #333;
-  background-color: #1a1a1a;
+  transition: background-color 0.3s;
 }
 
 .group-item:hover {
-  background-color: #f9f9f9;
-}
-
-.dark-mode .group-item:hover {
-  background-color: #2a2a2a;
+  background-color: #f5f5f5;
 }
 
 .group-item.active {
-  background-color: #e0f0ff;
+  background-color: #e6f7ff;
+}
+
+.dark-mode .group-item:hover {
+  background-color: #2d2d2d;
 }
 
 .dark-mode .group-item.active {
-  background-color: #1a3a4a;
-}
-
-.group-item .el-avatar {
-  margin-right: 15px;
-  background-color: #409eff;
-  color: white;
+  background-color: #1f1f1f;
 }
 
 .group-info {
   flex: 1;
-  min-width: 0;
+  margin-left: 15px;
 }
 
 .group-name {
-  font-weight: 500;
-  margin-bottom: 4px;
-  color: #1a1a1a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dark-mode .group-name {
-  color: #f5f5f5;
+  font-weight: bold;
+  margin-bottom: 5px;
 }
 
 .group-description {
   font-size: 12px;
   color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dark-mode .group-description {
-  color: #ccc;
 }
 
 .group-members {
   font-size: 12px;
-  color: #666;
-  margin-right: 10px;
-}
-
-.dark-mode .group-members {
-  color: #ccc;
+  color: #999;
 }
 
 .group-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  position: relative;
+  background-color: #ffffff;
 }
 
-.group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.dark-mode .group-main {
+  background-color: #1a1a1a;
+}
+
+.chat-header {
   padding: 15px 20px;
   border-bottom: 1px solid #ddd;
   background-color: #ffffff;
 }
 
-.dark-mode .group-header {
+.dark-mode .chat-header {
   border-bottom: 1px solid #444;
   background-color: #2d2d2d;
 }
 
-.group-header-info {
+.chat-header-info {
   display: flex;
   align-items: center;
 }
 
-.group-header-text {
+.chat-header-text {
   margin-left: 15px;
 }
 
 .group-name-header {
-  font-weight: 500;
+  font-weight: bold;
   font-size: 16px;
-  color: #1a1a1a;
-}
-
-.dark-mode .group-name-header {
-  color: #f5f5f5;
 }
 
 .group-member-count {
   font-size: 12px;
   color: #666;
+  margin-top: 5px;
 }
 
-.dark-mode .group-member-count {
-  color: #aaa;
-}
-
-.group-content {
+.chat-content {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background-color: #ffffff;
 }
 
-.dark-mode .group-content {
+.dark-mode .chat-content {
   background-color: #1a1a1a;
 }
 
-.group-details {
-  width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
 }
 
-.group-detail-item {
+.message-item {
   display: flex;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
+  margin-bottom: 20px;
 }
 
-.dark-mode .group-detail-item {
-  border-bottom: 1px solid #333;
+.message-item.is-self {
+  flex-direction: row-reverse;
 }
 
-.group-detail-item .label {
-  font-weight: 500;
-  width: 100px;
-  color: #1a1a1a;
+.message-item.is-self .message-content {
+  align-items: flex-end;
 }
 
-.dark-mode .group-detail-item .label {
+.message-item.is-self .message-info {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  margin: 0 10px;
+}
+
+.message-content {
+  display: flex;
+  flex-direction: column;
+  max-width: 70%;
+}
+
+.message-info {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.message-info .username {
+  font-size: 12px;
+  color: #666;
+  margin-right: 10px;
+}
+
+.message-info .time {
+  font-size: 12px;
+  color: #999;
+}
+
+.message-text {
+  background-color: #f5f5f5;
+  padding: 10px 15px;
+  border-radius: 8px;
+  word-break: break-word;
+}
+
+.dark-mode .message-text {
+  background-color: #2d2d2d;
   color: #f5f5f5;
+}
+
+.message-input {
+  padding: 20px;
+  border-top: 1px solid #ddd;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.dark-mode .message-input {
+  border-top: 1px solid #444;
+}
+
+.message-input .el-textarea {
+  flex: 1;
 }
 
 .group-placeholder {
@@ -461,13 +413,8 @@ onMounted(() => {
   color: #999;
 }
 
-.dark-mode .placeholder-content {
-  color: #ccc;
-}
-
 .placeholder-icon {
   font-size: 48px;
-  margin-bottom: 16px;
-  color: #409eff;
+  margin-bottom: 10px;
 }
 </style>
