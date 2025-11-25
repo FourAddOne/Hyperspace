@@ -33,7 +33,7 @@ public class OssUtil {
     /**
      * 上传文件到OSS，根据文件类型存储到不同的文件夹
      * @param file 要上传的文件
-     * @param fileType 文件类型 (avatar-头像, background-聊天背景, message-聊天图片, 其他默认为uploads)
+     * @param fileType 文件类型 (avatar-头像, background-聊天背景, message-聊天图片, file-聊天文件, 其他默认为uploads)
      * @return 返回文件在OSS中的路径
      */
     public String uploadFileToOSS(MultipartFile file, String fileType) throws IOException {
@@ -52,6 +52,8 @@ public class OssUtil {
             folder = "backgrounds/";
         } else if ("message".equals(fileType)) {
             folder = "messages/";
+        } else if ("file".equals(fileType)) {
+            folder = "files/";
         }
         
         String uniqueFilename = folder + UUID.randomUUID().toString() + fileExtension;

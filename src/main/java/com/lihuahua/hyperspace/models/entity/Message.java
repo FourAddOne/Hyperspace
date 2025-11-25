@@ -38,6 +38,16 @@ public class Message {
     @TableField("image_urls")
     private String imageUrls;
 
+    // 添加文件相关字段
+    @TableField("file_urls")
+    private String fileUrls;
+
+    @TableField("file_name")
+    private String fileName;
+
+    @TableField("file_size")
+    private Long fileSize;
+
     @TableField("client_timestamp")
     private Long clientTimestamp;
 

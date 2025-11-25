@@ -2,12 +2,37 @@ import { Client, Stomp } from '@stomp/stompjs';
 import type { StompSubscription } from '@stomp/stompjs';
 import { getToken } from '@/utils/auth';
 
+// 简单的日志级别控制
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+const log = {
+  debug: (...args: any[]) => {
+    if (isDevelopment) {
+      console.log('[DEBUG]', ...args);
+    }
+  },
+  info: (...args: any[]) => {
+    if (isDevelopment) {
+      console.log('[INFO]', ...args);
+    }
+  },
+  warn: (...args: any[]) => {
+    console.warn('[WARN]', ...args);
+  },
+  error: (...args: any[]) => {
+    console.error('[ERROR]', ...args);
+  }
+};
+
 class WebSocketService {
   private client: Client | null = null;
   private subscriptions: Map<string, StompSubscription> = new Map();
   private connected = false;
   private userStatusCallback: ((data: any) => void) | null = null;
   private messageCallback: ((data: any) => void) | null = null;
+  private reconnectTimeout: any = null;
+  private maxReconnectAttempts = 5;
+  private reconnectAttempts = 0;
 
   // 连接到WebSocket服务器
   connect(
@@ -18,13 +43,13 @@ class WebSocketService {
     if (this.connected && 
         this.userStatusCallback === onUserStatusChange && 
         this.messageCallback === onMessageReceived) {
-      console.log('WebSocket已经连接且回调函数未变化，无需重新连接');
+      log.debug('WebSocket已经连接且回调函数未变化，无需重新连接');
       return;
     }
     
     // 如果已经连接但回调函数有变化，只需要更新回调函数和重新订阅
     if (this.connected) {
-      console.log('WebSocket已连接，更新回调函数');
+      log.debug('WebSocket已连接，更新回调函数');
       this.userStatusCallback = onUserStatusChange;
       if (onMessageReceived) {
         this.messageCallback = onMessageReceived;
@@ -41,7 +66,8 @@ class WebSocketService {
     
     const token = getToken();
     if (!token) {
-      console.error('无法连接WebSocket: 没有访问令牌');
+      log.error('无法连接WebSocket: 没有访问令牌');
+      this.scheduleReconnect();
       return;
     }
 
@@ -54,7 +80,7 @@ class WebSocketService {
       // 启用STOMP客户端调试模式
       debug: function (str) {
         // 启用调试日志
-        // console.log('[STOMP DEBUG]', str);
+        log.debug('[STOMP]', str);
       },
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
@@ -63,8 +89,9 @@ class WebSocketService {
 
     // 连接成功回调
     this.client.onConnect = (frame) => {
-      // console.log('WebSocket连接成功:', frame);
+      log.info('WebSocket连接成功');
       this.connected = true;
+      this.reconnectAttempts = 0; // 重置重连尝试次数
 
       // 订阅用户状态变更消息
       this.subscribeToUserStatus();
@@ -77,24 +104,57 @@ class WebSocketService {
 
     // 连接错误回调
     this.client.onStompError = (frame) => {
-      // console.error('WebSocket连接错误: ', frame.headers['message']);
-      // console.error('详细错误信息: ', frame.body);
+      log.error('WebSocket连接错误: ', frame.headers['message']);
+      log.debug('详细错误信息: ', frame.body);
+      this.handleConnectionError();
     };
     
     // WebSocket断开连接回调
     this.client.onDisconnect = () => {
-      // console.log('WebSocket断开连接');
+      log.info('WebSocket断开连接');
       this.connected = false;
+      this.handleConnectionError();
     };
 
     // WebSocket连接失败回调
     this.client.onWebSocketError = (event) => {
-      // console.error('WebSocket连接失败:', event);
+      log.error('WebSocket连接失败:', event);
+      this.handleConnectionError();
     };
 
     // 启动连接
-    // console.log('激活WebSocket客户端');
+    log.debug('激活WebSocket客户端');
     this.client.activate();
+  }
+
+  // 处理连接错误
+  private handleConnectionError() {
+    this.connected = false;
+    this.scheduleReconnect();
+  }
+
+  // 安排重新连接
+  private scheduleReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      log.info(`尝试重新连接 (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+      
+      // 清除之前的重连定时器
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout);
+      }
+      
+      // 设置重新连接定时器
+      this.reconnectTimeout = setTimeout(() => {
+        log.debug('尝试重新连接WebSocket...');
+        const token = getToken();
+        if (token) {
+          this.connect(this.userStatusCallback!, this.messageCallback);
+        }
+      }, 3000 * this.reconnectAttempts); // 指数退避策略
+    } else {
+      log.error('达到最大重连尝试次数，停止重连');
+    }
   }
 
   // 更新用户状态回调函数
@@ -113,7 +173,7 @@ class WebSocketService {
 
   // 重新订阅主题
   private resubscribe() {
-    // console.log('重新订阅WebSocket主题');
+    log.debug('重新订阅WebSocket主题');
     // 取消现有订阅
     this.subscriptions.forEach((subscription, destination) => {
       subscription.unsubscribe();
@@ -131,16 +191,16 @@ class WebSocketService {
   private subscribeToUserStatus() {
     if (!this.client) return;
     
-    // console.log('订阅用户状态变更消息: /topic/user-status');
+    log.debug('订阅用户状态变更消息: /topic/user-status');
     const userStatusSubscription = this.client.subscribe('/topic/user-status', (message) => {
       try {
         const data = JSON.parse(message.body);
-        // console.log('收到用户状态变更消息:', data);
+        log.debug('收到用户状态变更消息:', data);
         if (this.userStatusCallback) {
           this.userStatusCallback(data);
         }
       } catch (error) {
-        // console.error('解析用户状态消息失败:', error);
+        log.error('解析用户状态消息失败:', error);
       }
     });
 
@@ -153,16 +213,16 @@ class WebSocketService {
   private subscribeToMessages() {
     if (!this.client || !this.messageCallback) return;
     
-    // console.log('订阅聊天消息: /user/queue/messages');
+    log.debug('订阅聊天消息: /user/queue/messages');
     const messageSubscription = this.client.subscribe('/user/queue/messages', (message) => {
       try {
         const data = JSON.parse(message.body);
-        // console.log('收到聊天消息:', data);
+        log.debug('收到聊天消息:', data);
         if (this.messageCallback) {
           this.messageCallback(data);
         }
       } catch (error) {
-        // console.error('解析聊天消息失败:', error);
+        log.error('解析聊天消息失败:', error);
       }
     });
 
@@ -173,8 +233,14 @@ class WebSocketService {
 
   // 断开连接
   disconnect() {
+    // 清除重连定时器
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
     if (this.client) {
-      // console.log('断开WebSocket连接');
+      log.info('断开WebSocket连接');
       // 取消所有订阅
       this.subscriptions.forEach((subscription, destination) => {
         subscription.unsubscribe();
@@ -184,6 +250,7 @@ class WebSocketService {
       // 断开连接
       this.client.deactivate();
       this.connected = false;
+      this.reconnectAttempts = 0;
     }
   }
 
@@ -195,13 +262,13 @@ class WebSocketService {
         timestamp: Date.now()
       };
       
-      // console.log('发送用户状态消息:', message);
+      log.debug('发送用户状态消息:', message);
       this.client.publish({
         destination: '/app/user/status',
         body: JSON.stringify(message)
       });
     } else {
-      // console.error('WebSocket未连接，无法发送消息');
+      log.error('WebSocket未连接，无法发送用户状态消息');
     }
   }
 
@@ -213,7 +280,7 @@ class WebSocketService {
         body: JSON.stringify({})
       });
     } else {
-      // console.error('WebSocket未连接，无法发送消息');
+      log.error('WebSocket未连接，无法发送消息');
     }
   }
   
@@ -225,13 +292,13 @@ class WebSocketService {
         body: JSON.stringify(message)
       });
     } else {
-      // console.error('WebSocket未连接，无法发送消息');
+      log.error('WebSocket未连接，无法发送聊天消息');
     }
   }
 
   // 检查连接状态
   isConnected(): boolean {
-    // console.log('检查WebSocket连接状态:', this.connected);
+    log.debug('检查WebSocket连接状态:', this.connected);
     return this.connected;
   }
 }

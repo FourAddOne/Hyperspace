@@ -1,19 +1,41 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import Sidebar from './Sidebar.vue'
-import { onMounted, onUnmounted, onActivated } from 'vue'
+import { onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import globalWebSocketManager from '../services/globalWebSocketManager'
+
+// 简单的日志级别控制
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+const log = {
+  debug: (...args: any[]) => {
+    if (isDevelopment) {
+      console.log('[DEBUG]', ...args);
+    }
+  },
+  info: (...args: any[]) => {
+    if (isDevelopment) {
+      console.log('[INFO]', ...args);
+    }
+  },
+  warn: (...args: any[]) => {
+    console.warn('[WARN]', ...args);
+  },
+  error: (...args: any[]) => {
+    console.error('[ERROR]', ...args);
+  }
+};
 
 // 处理用户状态变更
 const handleUserStatusChange = (data: any) => {
-  console.log('用户状态变更 (来自MainLayout):', data);
+  log.debug('用户状态变更 (来自MainLayout):', data);
   // 通过全局事件将状态变更传播到其他组件
   window.dispatchEvent(new CustomEvent('userStatusChange', { detail: data }));
 };
 
 // 处理实时消息
 const handleRealTimeMessage = (data: any) => {
-  console.log('收到实时消息 (来自MainLayout):', data);
+  log.debug('收到实时消息 (来自MainLayout):', data);
   // 通过全局事件将消息传播到其他组件
   window.dispatchEvent(new CustomEvent('realTimeMessage', { detail: data }));
 };
@@ -23,11 +45,11 @@ onMounted(() => {
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
   globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
   globalWebSocketManager.incrementConnection();
-  console.log('WebSocket连接初始化完成，当前连接数:', globalWebSocketManager.getConnectionCount());
+  log.debug('WebSocket连接初始化完成，当前连接数:', globalWebSocketManager.getConnectionCount());
 })
 
 onUnmounted(() => {
-  console.log('MainLayout卸载，清理WebSocket连接');
+  log.debug('MainLayout卸载，清理WebSocket连接');
   // 移除事件监听器
   window.removeEventListener('userStatusChange', handleUserStatusChange);
   window.removeEventListener('realTimeMessage', handleRealTimeMessage);
@@ -38,7 +60,7 @@ onUnmounted(() => {
 
 // 添加activated钩子确保组件激活时WebSocket回调正确设置
 onActivated(() => {
-  console.log('MainLayout激活，确保WebSocket连接，当前连接数:', globalWebSocketManager.getConnectionCount());
+  log.debug('MainLayout激活，确保WebSocket连接，当前连接数:', globalWebSocketManager.getConnectionCount());
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
   globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
   globalWebSocketManager.incrementConnection();
@@ -47,6 +69,12 @@ onActivated(() => {
   if (globalWebSocketManager.isConnected()) {
     globalWebSocketManager.sendUserStatus(true);
   }
+})
+
+// 添加deactivated钩子确保组件失活时减少连接引用
+onDeactivated(() => {
+  log.debug('MainLayout失活，减少WebSocket连接引用，当前连接数:', globalWebSocketManager.getConnectionCount());
+  globalWebSocketManager.decrementConnection();
 })
 </script>
 

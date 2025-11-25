@@ -29,6 +29,14 @@ const backgroundSettings = ref({
   backgroundOpacity: 100
 })
 
+// 添加控制附件工具栏展开/收起的状态
+const isAttachmentToolbarOpen = ref(false)
+
+// 切换附件工具栏的展开/收起状态
+const toggleAttachmentToolbar = () => {
+  isAttachmentToolbarOpen.value = !isAttachmentToolbarOpen.value;
+};
+
 // 计算背景样式
 const backgroundStyle = computed(() => {
   if (backgroundSettings.value.backgroundImage) {
@@ -65,7 +73,7 @@ const overlayStyle = computed(() => {
     // 计算透明度 (0-1之间)
     const opacity = 1 - (backgroundSettings.value.backgroundOpacity / 100);
     return {
-      backgroundColor: document.body.classList.contains('dark-mode') ? '#1a1a1a' : 'white',
+      backgroundColor: userStore.getDarkMode ? '#1a1a1a' : 'white',
       opacity: opacity,
       position: 'absolute',
       top: 0,
@@ -81,10 +89,10 @@ const overlayStyle = computed(() => {
     opacity: 0,
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 1
   }
 })
 
@@ -117,6 +125,10 @@ watch(() => userStore.getDarkMode, (newDarkMode) => {
   if (!newDarkMode) {
     document.body.style.backgroundImage = 'none';
   }
+  
+  // 强制更新背景样式以确保覆盖层颜色正确
+  // 通过创建一个新的对象引用来触发computed属性重新计算
+  backgroundSettings.value = { ...backgroundSettings.value };
 })
 
 // 更新背景设置
@@ -217,16 +229,24 @@ const handleRealTimeMessage = (message: any) => {
   // 处理当前活跃会话的消息
   if (activeConversation.value && activeConversation.value.id === partnerId) {
     // 添加消息到列表
-    const newMsg = {
+    const newMsg: any = {
       messageId: message.messageId,
       type: message.type,
       text: message.type === 'image' ? '[图片]' : message.textContent,
-      imageUrls: message.imageUrls,
       time: message.serverTimestamp ? new Date(message.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }): new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isSent: message.fromUserId === getUserInfo()?.userId,
       showDate: message.showDate || false, // 如果后端提供了showDate属性则使用，否则默认为false
       createdAt: message.serverTimestamp ? new Date(message.serverTimestamp).toISOString() : new Date().toISOString()
     };
+
+    // 根据消息类型添加特定字段
+    if (message.type === 'image') {
+      newMsg.imageUrls = message.imageUrls;
+    } else if (message.type === 'file') {
+      newMsg.fileUrl = message.fileUrl;
+      newMsg.fileName = message.fileName;
+      newMsg.fileSize = message.fileSize;
+    }
 
     // 检查是否需要显示日期（如果这是当天第一条消息）
     if (messages.value.length === 0) {
@@ -259,9 +279,16 @@ const handleRealTimeMessage = (message: any) => {
   // 更新会话列表中的最后消息（无论是否是当前会话）
   const updatedConversations = conversations.value.map(conversation => {
     if (conversation.id === partnerId) {
+      let lastMessage = message.textContent;
+      if (message.type === 'image') {
+        lastMessage = '[图片]';
+      } else if (message.type === 'file') {
+        lastMessage = `[文件] ${message.fileName || ''}`;
+      }
+      
       return {
         ...conversation,
-        lastMessage: message.type === 'image' ? '[图片]' : message.textContent,
+        lastMessage: lastMessage,
         time: message.serverTimestamp ? new Date(message.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
     }
@@ -305,16 +332,28 @@ const loadMessages = async (conversationId: string) => {
 
     // 确保响应数据存在且为数组
     if (response && Array.isArray(response.data)) {
-      messages.value = response.data.map((msg: any) => ({
-        messageId: msg.messageId,
-        type: msg.type || 'text',
-        text: msg.textContent,
-        imageUrls: msg.imageUrls,
-        time: msg.serverTimestamp ? new Date(msg.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }): '',
-        isSent: msg.fromUserId !== conversationId,
-        showDate: msg.showDate || false,
-        createdAt: msg.serverTimestamp ? new Date(msg.serverTimestamp).toISOString() : ''
-      }))
+      messages.value = response.data.map((msg: any) => {
+        const baseMessage: any = {
+          messageId: msg.messageId,
+          type: msg.type || 'text',
+          text: msg.textContent,
+          time: msg.serverTimestamp ? new Date(msg.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }): '',
+          isSent: msg.fromUserId !== conversationId,
+          showDate: msg.showDate || false,
+          createdAt: msg.serverTimestamp ? new Date(msg.serverTimestamp).toISOString() : ''
+        };
+
+        // 根据消息类型添加特定字段
+        if (msg.type === 'image') {
+          baseMessage.imageUrls = msg.imageUrls;
+        } else if (msg.type === 'file') {
+          baseMessage.fileUrl = msg.fileUrl;
+          baseMessage.fileName = msg.fileName;
+          baseMessage.fileSize = msg.fileSize;
+        }
+
+        return baseMessage;
+      });
     } else {
       // 如果没有消息或响应格式不正确，初始化为空数组
       messages.value = []
@@ -426,32 +465,32 @@ const selectFile = () => {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.onchange = (e) => {
-    // 文件选择功能待实现
-    ElMessage.info('文件发送功能正在开发中');
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+      const selectedFile = target.files[0];
+      // 发送文件消息
+      sendFileMessage(selectedFile);
+    }
   };
   fileInput.click();
 };
 
-// 发送图片消息时显示加载提示
-const sendImageMessage = async () => {
-  if (!selectedImage.value || !activeConversation.value) {
-    return;
-  }
-
+// 通用文件上传函数
+const uploadFile = async (file: File, fileType: string, loadingText: string) => {
   try {
     // 显示上传提示
     const loadingMessage = ElMessage({
-      message: '正在上传图片...',
+      message: loadingText,
       type: 'info',
       duration: 0 // 不自动关闭
     });
 
-    // 创建FormData对象用于上传图片
+    // 创建FormData对象用于上传文件
     const formData = new FormData();
-    formData.append('file', selectedImage.value);
-    formData.append('fileType', 'message'); // 聊天图片类型
+    formData.append('file', file);
+    formData.append('fileType', fileType);
 
-    // 上传图片到服务器
+    // 上传文件到服务器
     const response = await apiClient.post('/file/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
@@ -462,72 +501,145 @@ const sendImageMessage = async () => {
     loadingMessage.close();
 
     if (response && response.code === 200) {
-      const imageUrl = response.data;
-
-      // 构造本地图片消息对象（用于立即显示）
-      const localMessage = {
-        messageId: 'temp_' + Date.now().toString(), // 临时ID
-        type: 'image',
-        text: '[图片]',
-        imageUrls: imageUrl,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isSent: true,
-        showDate: false,
-        createdAt: new Date().toISOString(),
-        clientTimestamp: Date.now()
-      };
-
-      // 立即添加到消息列表（优化用户体验）
-      messages.value.push(localMessage);
-
-      // 滚动到底部
-      scrollToBottom();
-
-      // 通过WebSocket发送消息
-      if (globalWebSocketManager.isConnected()) {
-        const messageDTO = {
-          fromUserId: getUserInfo()?.userId,
-          toTargetId: activeConversation.value.id,
-          toTargetType: 'user',
-          type: 'image',
-          imageUrls: imageUrl,
-          clientTimestamp: Date.now(),
-          status: 'sending'
-        };
-
-        globalWebSocketManager.sendMessage(messageDTO);
-
-        // 清除选中的图片和输入框
-        selectedImage.value = null;
-        newMessage.value = '';
-      } else {
-        ElMessage.error('WebSocket未连接，无法发送消息');
-        // 如果发送失败，从消息列表中移除本地消息
-        const index = messages.value.findIndex(msg => msg.messageId === localMessage.messageId);
-        if (index !== -1) {
-          messages.value.splice(index, 1);
-        }
-      }
+      return response.data;
     } else {
       throw new Error(response?.msg || '上传失败');
     }
   } catch (error: any) {
     // 关闭加载提示
-    const loadingInstance = document.querySelector('.el-message');
-    if (loadingInstance) {
-      ElMessage.closeAll();
-    }
+    ElMessage.closeAll();
     
     // 检查是否是认证错误
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
       ElMessage.error('登录已过期，请重新登录');
-      return;
+      throw error;
     }
 
-    ElMessage.error('发送图片消息失败: ' + (error.message || '未知错误'));
-    
+    ElMessage.error(`${loadingText}失败: ` + (error.message || '未知错误'));
+    throw error;
+  }
+};
+
+// 发送图片消息时显示加载提示
+const sendImageMessage = async () => {
+  if (!selectedImage.value || !activeConversation.value) {
+    return;
+  }
+
+  try {
+    // 上传图片
+    const imageUrl = await uploadFile(selectedImage.value, 'message', '正在上传图片...');
+
+    // 构造本地图片消息对象（用于立即显示）
+    const localMessage = {
+      messageId: 'temp_' + Date.now().toString(), // 临时ID
+      type: 'image',
+      text: '[图片]',
+      imageUrls: imageUrl,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSent: true,
+      showDate: false,
+      createdAt: new Date().toISOString(),
+      clientTimestamp: Date.now()
+    };
+
+    // 立即添加到消息列表（优化用户体验）
+    messages.value.push(localMessage);
+
+    // 滚动到底部
+    scrollToBottom();
+
+    // 通过WebSocket发送消息
+    if (globalWebSocketManager.isConnected()) {
+      const messageDTO = {
+        fromUserId: getUserInfo()?.userId,
+        toTargetId: activeConversation.value.id,
+        toTargetType: 'user',
+        type: 'image',
+        imageUrls: imageUrl,
+        clientTimestamp: Date.now(),
+        status: 'sending'
+      };
+
+      globalWebSocketManager.sendMessage(messageDTO);
+
+      // 清除选中的图片和输入框
+      selectedImage.value = null;
+      newMessage.value = '';
+    } else {
+      ElMessage.error('WebSocket未连接，无法发送消息');
+      // 如果发送失败，从消息列表中移除本地消息
+      const index = messages.value.findIndex(msg => msg.messageId === localMessage.messageId);
+      if (index !== -1) {
+        messages.value.splice(index, 1);
+      }
+    }
+  } catch (error: any) {
     // 清除选中的图片
     selectedImage.value = null;
+  }
+};
+
+// 发送文件消息
+const sendFileMessage = async (file: File) => {
+  if (!activeConversation.value) {
+    return;
+  }
+
+  try {
+    // 上传文件
+    const fileUrl = await uploadFile(file, 'file', '正在上传文件...');
+
+    // 构造本地文件消息对象（用于立即显示）
+    const localMessage = {
+      messageId: 'temp_' + Date.now().toString(), // 临时ID
+      type: 'file',
+      text: `[文件] ${file.name}`,
+      fileUrl: fileUrl,
+      fileName: file.name,
+      fileSize: file.size || undefined, // 如果没有文件大小，则设为undefined
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSent: true,
+      showDate: false,
+      createdAt: new Date().toISOString(),
+      clientTimestamp: Date.now()
+    };
+
+    // 立即添加到消息列表（优化用户体验）
+    messages.value.push(localMessage);
+
+    // 滚动到底部
+    scrollToBottom();
+
+    // 通过WebSocket发送消息
+    if (globalWebSocketManager.isConnected()) {
+      const messageDTO = {
+        fromUserId: getUserInfo()?.userId,
+        toTargetId: activeConversation.value.id,
+        toTargetType: 'user',
+        type: 'file',
+        fileUrl: fileUrl,  // 保持与后端DTO字段一致
+        fileName: file.name,
+        fileSize: file.size || undefined,
+        textContent: `[文件] ${file.name}`,
+        clientTimestamp: Date.now(),
+        status: 'sending'
+      };
+
+      globalWebSocketManager.sendMessage(messageDTO);
+
+      // 清除输入框
+      newMessage.value = '';
+    } else {
+      ElMessage.error('WebSocket未连接，无法发送消息');
+      // 如果发送失败，从消息列表中移除本地消息
+      const index = messages.value.findIndex(msg => msg.messageId === localMessage.messageId);
+      if (index !== -1) {
+        messages.value.splice(index, 1);
+      }
+    }
+  } catch (error: any) {
+    // 错误已在uploadFile函数中处理
   }
 };
 
@@ -542,6 +654,26 @@ const previewImage = (url: string) => {
   if (url) {
     window.open(url, '_blank');
   }
+};
+
+// 下载文件
+const downloadFile = (fileUrl: string, fileName: string) => {
+  const link = document.createElement('a');
+  link.href = fileUrl;
+  link.download = fileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+// 格式化文件大小显示
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
 // 滚动到底部
@@ -845,6 +977,15 @@ const handleGlobalRealTimeMessage = (event: Event) => {
                     <div v-else-if="message.type === 'image'" class="message-image">
                       <img :src="getImageUrl(message.imageUrls)" alt="图片消息" @click="previewImage(getImageUrl(message.imageUrls))" />
                     </div>
+                    <!-- 显示文件消息 -->
+                    <div v-else-if="message.type === 'file'" class="message-file">
+                      <div class="file-icon">📁</div>
+                      <div class="file-info">
+                        <div class="file-name" @click="downloadFile(message.fileUrl, message.fileName)">{{ message.fileName }}</div>
+                        <div class="file-size">{{ formatFileSize(message.fileSize) }}</div>
+                      </div>
+                      <el-button size="small" @click="downloadFile(message.fileUrl, message.fileName)">下载</el-button>
+                    </div>
                     <!-- 其他类型消息默认显示文本 -->
                     <div v-else class="message-text">{{ message.text }}</div>
                     <div class="message-time">{{ message.time }}</div>
@@ -857,37 +998,56 @@ const handleGlobalRealTimeMessage = (event: Event) => {
         </div>
         
         <div class="chat-input-area" v-if="activeConversation">
-          <div class="chat-input-tools">
+          <div class="input-container-wrapper">
+            <!-- 折叠按钮 -->
             <button 
-              @click="selectImage"
-              class="icon-button"
-              title="发送图片">
-              📷
+              v-if="activeConversation"
+              @click="toggleAttachmentToolbar"
+              class="icon-button toggle-attachment-button"
+              :class="{ 'expanded': isAttachmentToolbarOpen }"
+              title="附件工具">
+              <span v-if="!isAttachmentToolbarOpen">+</span>
+              <span v-else">−</span>
             </button>
-            <button 
-              @click="selectFile"
-              class="icon-button"
-              title="发送文件">
-              📎
-            </button>
-          </div>
-          <el-input
-            v-model="newMessage"
-            type="textarea"
-            :rows="2"
-            placeholder="输入消息..."
-            @keyup.enter="sendMessage"
-            class="message-input"
-          ></el-input>
-          <div class="chat-input-actions">
-            <el-button 
-              type="primary" 
-              @click="sendMessage"
-              :disabled="!newMessage.trim()"
-              size="small"
-            >
-              发送
-            </el-button>
+            
+            <div class="input-and-toolbar-container">
+              <!-- 附件工具栏（默认隐藏） -->
+              <div v-show="isAttachmentToolbarOpen && activeConversation" class="chat-input-tools">
+                <button 
+                  @click="selectImage"
+                  class="icon-button"
+                  title="发送图片">
+                  📷
+                </button>
+                <button 
+                  @click="selectFile"
+                  class="icon-button"
+                  title="发送文件">
+                  📎
+                </button>
+              </div>
+              
+              <div class="input-container">
+                <el-input
+                  v-model="newMessage"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="输入消息..."
+                  @keyup.enter="sendMessage"
+                  class="message-input"
+                ></el-input>
+                <div class="chat-input-actions">
+                  <el-button 
+                    type="primary" 
+                    @click="sendMessage"
+                    :disabled="!newMessage.trim()"
+                    size="small"
+                  >
+                    发送
+                  </el-button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -1316,8 +1476,17 @@ const handleGlobalRealTimeMessage = (event: Event) => {
   color: #ccc;
 }
 
-.chat-input-tools {
+.chat-input-tools-wrapper {
+  display: flex;
+  align-items: center;
   margin-bottom: 10px;
+}
+
+.toggle-attachment-button {
+  margin-right: 8px;
+}
+
+.chat-input-tools {
   display: flex;
   gap: 8px;
 }
@@ -1392,5 +1561,183 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 .placeholder-icon {
   font-size: 48px;
   margin-bottom: 16px;
+}
+
+.message-file {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  max-width: 300px;
+}
+
+.dark-mode .message-file {
+  background-color: #333;
+}
+
+.file-icon {
+  font-size: 24px;
+  margin-right: 10px;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 14px;
+  color: #1a1a1a;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark-mode .file-name {
+  color: #ffffff;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.dark-mode .file-size {
+  color: #e0e0e0;
+}
+
+.attachment-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-right: 8px;
+}
+
+.icon-button.expanded {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.dark-mode .icon-button.expanded {
+  background: linear-gradient(135deg, #764ba2, #667eea);
+  color: white;
+  border-color: #764ba2;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.chat-input-tools {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.input-container-wrapper {
+  display: flex;
+  align-items: flex-end;
+}
+
+.input-and-toolbar-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.toggle-attachment-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #dcdfe6;
+  background-color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.3s;
+  color: #606266;
+  line-height: 1;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.toggle-attachment-button:hover {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.dark-mode .toggle-attachment-button {
+  background-color: #2d2d2d;
+  border-color: #444;
+  color: #ccc;
+}
+
+.dark-mode .toggle-attachment-button:hover {
+  background: linear-gradient(135deg, #764ba2, #667eea);
+  color: white;
+  border-color: #764ba2;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.icon-button.expanded {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.dark-mode .icon-button.expanded {
+  background: linear-gradient(135deg, #764ba2, #667eea);
+  color: white;
+  border-color: #764ba2;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.input-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  /* 移除input-container的上边距，避免产生细线 */
+  margin-top: 0;
+  /* 确保容器紧贴上方元素 */
+  padding-top: 0;
+}
+
+/* 调整消息输入框的样式，移除可能的上边框 */
+.message-input {
+  flex: 1;
+  /* 移除可能的上边距 */
+  margin-top: 0;
+}
+
+/* 调整Element Plus textarea的样式 */
+.message-input :deep(.el-textarea__inner) {
+  /* 移除上边框 */
+  border-top: none;
+  /* 确保没有上边距 */
+  margin-top: 0;
+}
+
+.dark-mode .message-input :deep(.el-textarea__inner) {
+  background-color: #1a1a1a;
+  border-color: #444;
+  color: #f5f5f5;
+  /* 在暗色模式下也移除上边框 */
+  border-top: none;
+}
+
+.dark-mode .message-input :deep(.el-textarea__inner:focus) {
+  border-color: #409eff;
+  /* 聚焦时也保持上边框移除 */
+  border-top: none;
+}
+
+.chat-input-actions {
+  margin-bottom: 5px;
 }
 </style>

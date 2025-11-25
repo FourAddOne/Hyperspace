@@ -78,12 +78,28 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
             message.setToTargetId(messageDTO.getToTargetId());
             message.setToTargetType("user");
             message.setTextContent(messageDTO.getTextContent());
+            
             // 处理图片URL，将其转换为相对路径存储在数据库中
             if (messageDTO.getImageUrls() != null && !messageDTO.getImageUrls().isEmpty()) {
                 // 直接转换为相对路径
                 String relativePath = ossUtil.extractObjectNameFromUrl(messageDTO.getImageUrls());
                 message.setImageUrls(relativePath);
             }
+            
+            // 处理文件URL，将其转换为相对路径存储在数据库中
+            if (messageDTO.getFileUrl() != null && !messageDTO.getFileUrl().isEmpty()) {
+                // 直接转换为相对路径
+                String relativePath = ossUtil.extractObjectNameFromUrl(messageDTO.getFileUrl());
+                message.setFileUrls(relativePath);
+                // 文件名和文件大小是可选的
+                if (messageDTO.getFileName() != null && !messageDTO.getFileName().isEmpty()) {
+                    message.setFileName(messageDTO.getFileName());
+                }
+                if (messageDTO.getFileSize() != null) {
+                    message.setFileSize(messageDTO.getFileSize());
+                }
+            }
+            
             message.setClientTimestamp(messageDTO.getClientTimestamp() != null ? messageDTO.getClientTimestamp() : System.currentTimeMillis());
             message.setServerTimestamp(System.currentTimeMillis());
             message.setStatus("success");
@@ -119,14 +135,13 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
             List<Message> messages = messageMapper.getChatHistory(userId, friendId);
             List<MessageDTO> messageDTOs = new ArrayList<>();
             
+            // 获取发送者用户信息
+            User sender = userMapper.selectById(friendId);
+            
             // 用于跟踪每天是否已经显示过日期
             Set<LocalDate> datesWithShownDate = new HashSet<>();
             
-            // 按时间排序消息
-            messages.sort(Comparator.comparing(Message::getServerTimestamp));
-            
             for (Message message : messages) {
-                User sender = userMapper.selectById(message.getFromUserId());
                 MessageDTO dto = new MessageDTO();
                 dto.setMessageId(message.getMessageId());
                 dto.setType(message.getType());
@@ -136,9 +151,21 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
                 
                 // 处理图片URL，将其转换为完整URL
                 if (message.getImageUrls() != null && !message.getImageUrls().isEmpty()) {
-                    // 直接转换为完整URL
                     String fullUrl = ossUtil.convertToFullUrl(message.getImageUrls());
                     dto.setImageUrls(fullUrl);
+                }
+                
+                // 处理文件URL，将其转换为完整URL
+                if (message.getFileUrls() != null && !message.getFileUrls().isEmpty()) {
+                    String fullUrl = ossUtil.convertToFullUrl(message.getFileUrls());
+                    dto.setFileUrl(fullUrl);
+                    // 文件名和文件大小是可选的
+                    if (message.getFileName() != null && !message.getFileName().isEmpty()) {
+                        dto.setFileName(message.getFileName());
+                    }
+                    if (message.getFileSize() != null) {
+                        dto.setFileSize(message.getFileSize());
+                    }
                 }
                 
                 dto.setServerTimestamp(message.getServerTimestamp());

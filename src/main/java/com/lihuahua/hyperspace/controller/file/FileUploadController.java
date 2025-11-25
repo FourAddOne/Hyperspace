@@ -37,10 +37,10 @@ public class FileUploadController {
             log.info("使用OSS上传");
             String filePath = ossUtil.uploadFileToOSS(file, fileType);
             log.info("文件在OSS中的路径: {}", filePath);
-            // 对于头像、背景和聊天图片，使用公开URL；其他文件使用公开URL（解决预签名URL过期问题）
-            log.info("检查文件类型: '{}' 是否为头像、背景或聊天图片", fileType);
+            // 对于头像、背景、聊天图片和聊天文件，使用公开URL；其他文件使用公开URL（解决预签名URL过期问题）
+            log.info("检查文件类型: '{}' 是否为头像、背景、聊天图片或聊天文件", fileType);
             String fileUrl;
-            if ("avatar".equals(fileType) || "background".equals(fileType) || "message".equals(fileType)) {
+            if ("avatar".equals(fileType) || "background".equals(fileType) || "message".equals(fileType) || "file".equals(fileType)) {
                 log.info("生成公开URL");
                 fileUrl = ossUtil.generatePublicUrl(filePath);
             } else {
