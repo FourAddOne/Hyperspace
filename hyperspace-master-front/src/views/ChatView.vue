@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed, onUnmounted, watch, reactive, onActivated, watchEffect } from 'vue'
+import { ref, onMounted, nextTick, computed, onUnmounted, watch, onActivated } from 'vue'
 import { ElMessage } from 'element-plus'
-import apiClient from '../services/api'
+import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useRoute } from 'vue-router'
 import { getFullAvatarUrl, getUserInfo } from '../utils/user'
 import globalWebSocketManager from '../services/globalWebSocketManager'
 import { useUserStore } from '../stores/userStore'
+import type { CSSProperties } from 'vue'
 
 // 获取路由实例
 const route = useRoute()
@@ -38,7 +39,7 @@ const toggleAttachmentToolbar = () => {
 };
 
 // 计算背景样式
-const backgroundStyle = computed(() => {
+const backgroundStyle = computed((): CSSProperties => {
   if (backgroundSettings.value.backgroundImage) {
     return {
       backgroundImage: `url(${backgroundSettings.value.backgroundImage})`,
@@ -46,10 +47,10 @@ const backgroundStyle = computed(() => {
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
       position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: '0px',
+      left: '0px',
+      right: '0px',
+      bottom: '0px',
       zIndex: 0
     }
   }
@@ -58,17 +59,17 @@ const backgroundStyle = computed(() => {
     backgroundImage: 'none',
     backgroundColor: 'transparent',
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: '0px',
+    left: '0px',
+    right: '0px',
+    bottom: '0px',
     zIndex: 0
-  }
+  } as CSSProperties
 })
 
 
 // 计算覆盖层样式
-const overlayStyle = computed(() => {
+const overlayStyle = computed((): CSSProperties => {
   if (backgroundSettings.value.backgroundImage) {
     // 计算透明度 (0-1之间)
     const opacity = 1 - (backgroundSettings.value.backgroundOpacity / 100);
@@ -76,24 +77,24 @@ const overlayStyle = computed(() => {
       backgroundColor: userStore.getDarkMode ? '#1a1a1a' : 'white',
       opacity: opacity,
       position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: '0px',
+      left: '0px',
+      right: '0px',
+      bottom: '0px',
       zIndex: 1
-    }
+    } as CSSProperties
   }
   // 如果没有背景图片，返回透明覆盖层
   return {
     backgroundColor: 'transparent',
     opacity: 0,
     position: 'absolute',
-    top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      zIndex: 1
-  }
+    top: '0px',
+    left: '0px',
+    right: '0px',
+    bottom: '0px',
+    zIndex: 1
+  } as CSSProperties
 })
 
 // 格式化日期显示
@@ -277,7 +278,7 @@ const handleRealTimeMessage = (message: any) => {
   }
 
   // 更新会话列表中的最后消息（无论是否是当前会话）
-  const updatedConversations = conversations.value.map(conversation => {
+  conversations.value = conversations.value.map(conversation => {
     if (conversation.id === partnerId) {
       let lastMessage = message.textContent;
       if (message.type === 'image') {
@@ -294,8 +295,6 @@ const handleRealTimeMessage = (message: any) => {
     }
     return conversation;
   });
-
-  conversations.value = updatedConversations;
 
   // 如果不是当前会话的消息，增加未读计数
   if (!activeConversation.value || activeConversation.value.id !== partnerId) {
@@ -326,7 +325,7 @@ const selectConversation = async (conversation: any) => {
 // 加载消息
 const loadMessages = async (conversationId: string) => {
   try {
-    const response = await apiClient.get('/api/messages/history', {
+    const response = await apiClient.get(API_ENDPOINTS.MESSAGE_HISTORY, {
       params: { friendId: conversationId }
     })
 
@@ -491,7 +490,7 @@ const uploadFile = async (file: File, fileType: string, loadingText: string) => 
     formData.append('fileType', fileType);
 
     // 上传文件到服务器
-    const response = await apiClient.post('/file/upload', formData, {
+    const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -500,6 +499,8 @@ const uploadFile = async (file: File, fileType: string, loadingText: string) => 
     // 关闭加载提示
     loadingMessage.close();
 
+    // 注意：由于apiClient的响应拦截器，response已经是response.data（ResVO对象）
+    // 所以我们可以直接访问code和msg属性
     if (response && response.code === 200) {
       return response.data;
     } else {
@@ -718,7 +719,7 @@ watch(() => route.path, (newPath) => {
 // 加载会话列表
 const loadConversations = async () => {
   try {
-    const response = await apiClient.get('/api/friends/list')
+    const response = await apiClient.get(API_ENDPOINTS.FRIENDS_LIST)
     conversations.value = response.data.map((friend: any) => ({
       id: friend.userId,
       name: friend.remark || friend.userName,
@@ -731,15 +732,16 @@ const loadConversations = async () => {
     // 获取未读消息数量
     if (conversations.value.length > 0) {
       const friendIds = conversations.value.map((conv: any) => conv.id);
-      const unreadResponse = await apiClient.get('/api/messages/unread-counts', {
+      const unreadResponse = await apiClient.get(API_ENDPOINTS.MESSAGE_UNREAD_COUNTS, {
         params: { friendIds }
       });
 
       if (unreadResponse && unreadResponse.data) {
         // 更新未读消息计数
         Object.entries(unreadResponse.data).forEach(([friendId, count]) => {
-          if (count > 0) {
-            unreadCounts.value.set(friendId, count as number);
+          const countNum = count as number;
+          if (countNum > 0) {
+            unreadCounts.value.set(friendId, countNum);
           }
         });
       }
@@ -753,7 +755,7 @@ const loadConversations = async () => {
 // 标记消息为已读
 const markMessagesAsRead = async (friendId: string) => {
   try {
-    await apiClient.post('/api/messages/mark-as-read', null, {
+    await apiClient.post(API_ENDPOINTS.MESSAGE_MARK_AS_READ, null, {
       params: { friendId }
     });
   } catch (error) {
@@ -766,15 +768,16 @@ const refreshUnreadCounts = async () => {
   if (conversations.value.length > 0) {
     try {
       const friendIds = conversations.value.map((conv: any) => conv.id);
-      const unreadResponse = await apiClient.get('/api/messages/unread-counts', {
+      const unreadResponse = await apiClient.get(API_ENDPOINTS.MESSAGE_UNREAD_COUNTS, {
         params: { friendIds }
       });
 
       if (unreadResponse && unreadResponse.data) {
         // 只更新未读计数大于0的会话，不清空其他已读会话的计数
         Object.entries(unreadResponse.data).forEach(([friendId, count]) => {
-          if (count > 0) {
-            unreadCounts.value.set(friendId, count as number);
+          const countNum = count as number;
+          if (countNum > 0) {
+            unreadCounts.value.set(friendId, countNum);
           } else {
             // 如果未读数为0，确保从Map中删除该会话
             unreadCounts.value.delete(friendId);
@@ -921,8 +924,8 @@ const handleGlobalRealTimeMessage = (event: Event) => {
             <div class="conversation-time">{{ conversation.time }}</div>
             <div class="conversation-status" :class="{ online: conversation.status === '在线' }"></div>
             <!-- 未读消息红点 -->
-            <div v-if="unreadCounts.get(conversation.id) > 0" class="unread-badge">
-              {{ unreadCounts.get(conversation.id) > 99 ? '99+' : unreadCounts.get(conversation.id) }}
+            <div v-if="(unreadCounts.get(conversation.id) || 0) > 0" class="unread-badge">
+              {{ (unreadCounts.get(conversation.id) || 0) > 99 ? '99+' : (unreadCounts.get(conversation.id) || 0) }}
             </div>
           </div>
         </div>
@@ -934,7 +937,7 @@ const handleGlobalRealTimeMessage = (event: Event) => {
             <el-avatar :size="40" :src="getFullAvatarUrl(activeConversation.avatar)" />
             <div class="chat-header-text">
               <div class="chat-participant-name">{{ activeConversation.name }}</div>
-              <div class="chat-status">{{ activeConversation.status }}</div>
+              <div class="chat-status" :class="activeConversation.status === '在线' ? 'status-online' : 'status-offline'">{{ activeConversation.status }}</div>
             </div>
           </div>
           <div class="chat-header-actions">
@@ -990,7 +993,7 @@ const handleGlobalRealTimeMessage = (event: Event) => {
                     <div v-else class="message-text">{{ message.text }}</div>
                     <div class="message-time">{{ message.time }}</div>
                   </div>
-                  <el-avatar v-if="message.isSent" :src="getFullAvatarUrl(getUserInfo()?.avatarUrl)" class="message-avatar" />
+                  <el-avatar v-if="message.isSent" :src="getFullAvatarUrl(getUserInfo()?.avatarUrl || '')" class="message-avatar" />
                 </div>
               </template>
             </div>
@@ -1007,7 +1010,7 @@ const handleGlobalRealTimeMessage = (event: Event) => {
               :class="{ 'expanded': isAttachmentToolbarOpen }"
               title="附件工具">
               <span v-if="!isAttachmentToolbarOpen">+</span>
-              <span v-else">−</span>
+              <span v-else>−</span>
             </button>
             
             <div class="input-and-toolbar-container">
@@ -1068,8 +1071,8 @@ const handleGlobalRealTimeMessage = (event: Event) => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: var(--background-color);
-  color: var(--text-color);
+  background-color: #ffffff;
+  color: #1a1a1a;
 }
 
 .chat-container {
@@ -1265,7 +1268,14 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 
 .chat-status {
   font-size: 12px;
-  color: #666;
+}
+
+.chat-status.status-online {
+  color: #67c23a; /* 绿色 */
+}
+
+.chat-status.status-offline {
+  color: #909399; /* 灰色 */
 }
 
 .dark-mode .chat-status {

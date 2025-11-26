@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import apiClient from '../services/api'
+import apiClient, { API_ENDPOINTS } from '../services/api'
 import { saveToken } from '../utils/auth'
-import { saveUserInfo } from '../utils/user'
-import { API_ENDPOINTS } from '../constants/api'
-import { getUserIP } from '../utils/ip'
+import { ElMessage } from 'element-plus'
+import { useUserStore } from '../stores/userStore'
 
 const router = useRouter()
+const userStore = useUserStore()
 
 // 表单数据
 const registerForm = ref({
@@ -81,74 +81,65 @@ const handleRegister = async () => {
   errorMessage.value = ''
 
   try {
-    // 获取用户IP地址
-    const userIP = await getUserIP();
-    
-    // 使用封装好的API客户端发送注册请求
-    const response = await apiClient.post(API_ENDPOINTS.USER_REGISTER, {
-      userName: registerForm.value.userName,
-      email: registerForm.value.email,
-      password: registerForm.value.password,
-      ip: userIP || '' // 如果获取不到IP，则传递空字符串
-    })
-
-    console.log('注册响应:', response); // 添加日志查看响应结构
-    
-    // 检查响应是否成功
-    if (response.code !== 200) {
-      throw new Error(response.msg || '注册失败');
+    const response = await apiClient.post(API_ENDPOINTS.USER_REGISTER, registerData)
+      
+    if (response && response.code !== 200) {
+      throw new Error(response.msg || '注册失败')
     }
-    
-    // 确保响应数据存在
-    if (!response.data) {
-      throw new Error('注册响应中缺少用户数据');
-    }
-    
-    // 从响应中获取token和用户信息
-    const { accessToken, refreshToken, userId, userName, email, avatarUrl, Ip } = response.data
-
-    // 保存token到localStorage
-    saveToken(accessToken, refreshToken)
-    
-    // 保存用户信息到localStorage
-    saveUserInfo({ userId, userName, email, avatarUrl, Ip })
-    
-    // 显示注册成功弹窗
-    showPopupMessage('注册成功！正在跳转...', 'success')
-
-    // 延迟跳转到聊天页面
-    setTimeout(() => {
-      router.push('/chat')
-    }, 1500)
-  } catch (error: any) {
-    console.error('注册失败:', error) // 添加详细的错误日志
-    // 更全面地处理错误信息
-    let message = ''
-    if (error.response) {
-      // 服务器响应了错误状态码
-      if (error.response.data) {
-        // 优先使用后端返回的错误信息
-        message = error.response.data.msg || 
-                  error.response.data.message || 
-                  error.response.data.error ||
-                  error.response.statusText || 
-                  '注册失败，请稍后重试'
+      
+    ElMessage.success('注册成功')
+      
+      // 注册成功后自动登录
+      await handleAutoLogin(registerData)
+    } catch (error: any) {
+      console.error('注册失败:', error)
+      if (error.response && error.response.data && error.response.data.msg) {
+        ElMessage.error(error.response.data.msg)
       } else {
-        message = error.response.statusText || '注册失败，请稍后重试'
+        ElMessage.error(error.message || '注册失败')
       }
-    } else if (error.request) {
-      // 请求已发出但没有收到响应
-      message = '网络连接异常，请检查网络后重试'
-    } else {
-      // 其他错误
-      message = error.message || '注册失败，请稍后重试'
+    } finally {
+      loading.value = false
     }
-    
-    showPopupMessage(message, 'error')
-  } finally {
-    loading.value = false
   }
-}
+  
+  // 自动登录函数
+  const handleAutoLogin = async (userData: any) => {
+    try {
+      const loginData = {
+        email: userData.email,
+        password: userData.password
+      }
+      
+      const response = await apiClient.post(API_ENDPOINTS.USER_LOGIN, loginData)
+      
+      if (response && response.code === 200 && response.data) {
+        // 保存token
+        const { accessToken, refreshToken } = response.data
+        saveToken(accessToken, refreshToken)
+        
+        // 应用暗色模式设置
+        document.body.classList.remove('login-page')
+        
+        ElMessage.success('注册并登录成功')
+        
+        // 添加延迟确保token被正确设置
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // 跳转到聊天页面
+        await router.push('/chat')
+      } else {
+        ElMessage.error(response?.msg || '自动登录失败')
+      }
+    } catch (error: any) {
+      console.error('自动登录失败:', error)
+      if (error.response && error.response.data && error.response.data.msg) {
+        ElMessage.error(error.response.data.msg)
+      } else {
+        ElMessage.error(error.message || '自动登录失败')
+      }
+    }
+  }
 
 // 监听路由变化，确保正确添加背景类
 router.afterEach((to, from) => {

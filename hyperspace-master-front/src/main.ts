@@ -9,6 +9,7 @@ import { getToken } from './utils/auth'
 // 引入Element Plus
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 // 引入WebSocket
 import webSocketService from './services/websocket'
@@ -21,6 +22,11 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 app.use(ElementPlus) // 注册Element Plus
+
+// 注册所有Element Plus图标
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(key, component)
+}
 
 // 全局前置守卫，检查路由访问权限
 router.beforeEach((to, from, next) => {

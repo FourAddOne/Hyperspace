@@ -144,7 +144,7 @@
 import { ref, onMounted, onUnmounted, onActivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import apiClient from '../services/api'
+import apiClient, { API_ENDPOINTS } from '../services/api'
 import { getFullAvatarUrl } from '../utils/user'
 
 const router = useRouter()
@@ -184,7 +184,7 @@ const searchFriends = () => {
 // 加载好友列表
 const loadFriends = async () => {
   try {
-    const response = await apiClient.get('/api/friends/list')
+    const response = await apiClient.get(API_ENDPOINTS.FRIENDS_LIST)
     console.log('好友列表数据:', response.data); // 添加调试日志
     allFriends.value = response.data
     filteredFriends.value = response.data
@@ -244,7 +244,7 @@ const handleUserStatusChange = (data: any) => {
 // 加载好友请求
 const loadFriendRequests = async () => {
   try {
-    const response = await apiClient.get('/api/friends/requests')
+    const response = await apiClient.get(API_ENDPOINTS.FRIEND_REQUESTS)
     pendingRequests.value = response.data
   } catch (error: any) {
     ElMessage.error('加载好友请求失败: ' + error.message)
@@ -252,7 +252,7 @@ const loadFriendRequests = async () => {
   
   // 加载已发送的好友请求
   try {
-    const response = await apiClient.get('/api/friends/sent-requests')
+    const response = await apiClient.get(API_ENDPOINTS.FRIEND_SENT_REQUESTS)
     sentRequests.value = response.data
   } catch (error: any) {
     ElMessage.error('加载已发送的好友请求失败: ' + error.message)
@@ -262,7 +262,7 @@ const loadFriendRequests = async () => {
 // 发送好友请求
 const sendFriendRequest = async (friendId: string) => {
   try {
-    await apiClient.post('/api/friends/request', null, {
+    await apiClient.post(API_ENDPOINTS.FRIEND_REQUEST, null, {
       params: { friendId }
     })
     ElMessage.success('好友请求已发送')
@@ -274,7 +274,7 @@ const sendFriendRequest = async (friendId: string) => {
 // 接受好友请求
 const acceptFriendRequest = async (requesterId: string) => {
   try {
-    await apiClient.post('/api/friends/accept', null, {
+    await apiClient.post(API_ENDPOINTS.FRIEND_ACCEPT, null, {
       params: { requesterId }
     })
     ElMessage.success('好友请求已接受')
@@ -289,7 +289,7 @@ const acceptFriendRequest = async (requesterId: string) => {
 // 拒绝好友请求
 const rejectFriendRequest = async (requesterId: string) => {
   try {
-    await apiClient.post('/api/friends/reject', null, {
+    await apiClient.post(API_ENDPOINTS.FRIEND_REJECT, null, {
       params: { requesterId }
     })
     ElMessage.success('好友请求已拒绝')
@@ -302,7 +302,7 @@ const rejectFriendRequest = async (requesterId: string) => {
 // 屏蔽用户（拒绝并屏蔽好友请求）
 const blockFriendRequest = async (requesterId: string) => {
   try {
-    await apiClient.post('/api/friends/block', null, {
+    await apiClient.post(API_ENDPOINTS.FRIEND_BLOCK, null, {
       params: { requesterId }
     })
     ElMessage.success('已屏蔽该用户')
@@ -336,7 +336,7 @@ const deleteFriend = (friendId: string) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await apiClient.delete('/api/friends/delete', {
+      await apiClient.delete(API_ENDPOINTS.FRIEND_DELETE, {
         params: { friendId }
       });
       ElMessage.success('好友已删除');
@@ -368,7 +368,7 @@ const saveRemark = async () => {
   }
   
   try {
-    await apiClient.post('/api/friends/remark', null, {
+    await apiClient.post(API_ENDPOINTS.FRIEND_REMARK, null, {
       params: { 
         friendId: currentFriend.value.userId,
         remark: remarkInput.value

@@ -11,6 +11,7 @@ export interface UserInfo {
   Ip: string;
   accessToken?: string;
   refreshToken?: string;
+  loginStatus?: boolean; // 添加用户登录状态字段
 }
 
 /**

@@ -5,6 +5,7 @@ import { ElMessage, ElSlider } from 'element-plus'
 import {getUserInfo, saveUserInfo, updateUserInfo} from '../utils/user'
 import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useUserStore } from '../stores/userStore'
+import type { ResVO } from '../types/api'
 
 // 用户信息
 const userInfo = ref({
@@ -151,7 +152,7 @@ const saveEditedProfile = async () => {
     // 更新用户名
     if (editedUserName.value !== userInfo.value.userName) {
       // 修改为直接访问data，因为拦截器现在自动返回response.data
-      const updateResponse = await apiClient.post('/user/update', {
+      const updateResponse = await apiClient.post(API_ENDPOINTS.USER_UPDATE, {
         userName: editedUserName.value
       })
       
@@ -262,7 +263,7 @@ const handleAvatarUpload = async (event: Event) => {
         
         // 更新用户头像到数据库
         try {
-          await apiClient.post('/user/avatar', null, {
+          await apiClient.post(API_ENDPOINTS.USER_AVATAR, null, {
             params: {
               avatarUrl: avatarUrl
             }
@@ -311,14 +312,14 @@ const handleBackgroundUpload = async (event: Event) => {
       formData.append('fileType', 'background') // 添加文件类型参数
       
       // 上传文件到服务器
-      const response = await apiClient.post(API_ENDPOINTS.FILE_UPLOAD, formData, {
+      const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       })
       
       // 检查响应是否成功
-      if (response && response.code === 200) {
+      if (response.code === 200) {
         // 获取背景图片URL
         const backgroundImageUrl = response.data;
         
@@ -335,7 +336,7 @@ const handleBackgroundUpload = async (event: Event) => {
           // 只有在保存设置成功后，才删除旧的背景图片
           if (oldBackgroundImage) {
             try {
-              await apiClient.delete('/file/delete', {
+              await apiClient.delete(API_ENDPOINTS.FILE_DELETE, {
                 params: { fileUrl: oldBackgroundImage }
               });
             } catch (error) {
@@ -505,7 +506,7 @@ const onBackgroundOpacityChange = async (value: number) => {
       }
     }
     
-    const response = await apiClient.post(API_ENDPOINTS.USER_SETTINGS, settingsToUpdate);
+    const response = await apiClient.post<ResVO<any>>(API_ENDPOINTS.USER_SETTINGS, settingsToUpdate);
     if (response && response.code === 200) {
       ElMessage.success('背景透明度已保存');
       
@@ -526,7 +527,7 @@ const onBackgroundOpacityChange = async (value: number) => {
 const updateAvatar = async (avatarUrl: string) => {
   try {
     // 修改为直接访问data，因为拦截器现在自动返回response.data
-    const response = await apiClient.post('/user/avatar', null, {
+    const response = await apiClient.post(API_ENDPOINTS.USER_AVATAR, null, {
       params: {
         avatarUrl: avatarUrl
       }
@@ -642,7 +643,7 @@ onMounted(() => {
               <button v-if="settings.backgroundImage" @click="clearBackground" class="clear-button">清除背景</button>
               <div v-if="settings.backgroundImage" class="preview-background">
                 <!-- 处理背景图片URL用于预览 -->
-                <img :src="settings.backgroundImage.startsWith('/api/') ? settings.backgroundImage : (settings.backgroundImage.startsWith('/uploads/') ? '/api' + settings.backgroundImage : settings.backgroundImage)" alt="预览" />
+                <img :src="settings.backgroundImage.startsWith('/uploads/') ? '/api' + settings.backgroundImage : settings.backgroundImage" alt="预览" />
               </div>
               <div class="opacity-control" v-if="settings.backgroundImage">
                 <label>背景不透明度:</label>

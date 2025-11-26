@@ -1,9 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { CSSProperties } from 'vue'
+
+// 定义消息类型
+interface Message {
+  id: string
+  content: string
+  sender: string
+  time: string
+  isOwn: boolean
+  avatar?: string
+}
 
 const props = defineProps({
   messages: {
-    type: Array,
+    type: Array as () => Message[],
     required: true
   },
   backgroundSettings: {
@@ -16,7 +27,7 @@ const props = defineProps({
 })
 
 // 计算背景样式
-const backgroundStyle = computed(() => {
+const backgroundStyle = computed<CSSProperties>(() => {
   if (props.backgroundSettings?.backgroundImage) {
     return {
       backgroundImage: `url(${props.backgroundSettings.backgroundImage})`,
@@ -24,10 +35,10 @@ const backgroundStyle = computed(() => {
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
       position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: '0px',
+      left: '0px',
+      right: '0px',
+      bottom: '0px',
       zIndex: 0
     }
   }
@@ -35,7 +46,7 @@ const backgroundStyle = computed(() => {
 })
 
 // 计算覆盖层样式
-const overlayStyle = computed(() => {
+const overlayStyle = computed<CSSProperties>(() => {
   if (props.backgroundSettings?.backgroundImage) {
     // 计算透明度 (0-1之间)
     const opacity = 1 - (props.backgroundSettings.backgroundOpacity / 100);
@@ -43,10 +54,10 @@ const overlayStyle = computed(() => {
       backgroundColor: 'white',
       opacity: opacity,
       position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: '0px',
+      left: '0px',
+      right: '0px',
+      bottom: '0px',
       zIndex: 1
     }
   }
@@ -105,11 +116,13 @@ const overlayStyle = computed(() => {
 }
 
 .message-list-background {
-  /* 背景层样式将在JavaScript中设置 */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .message-list-overlay {
-  /* 覆盖层样式将在JavaScript中设置 */
+  background-color: white;
 }
 
 .message {
@@ -150,6 +163,10 @@ const overlayStyle = computed(() => {
   line-height: 1.4;
 }
 
+.message-text {
+  color: #1a1a1a;
+}
+
 .own-bubble {
   background-color: #0084ff;
   color: white;
@@ -185,11 +202,6 @@ const overlayStyle = computed(() => {
   color: #f5f5f5;
 }
 
-.dark-mode .message-time {
-  color: #999;
-}
-
-/* 暗色模式下的覆盖层 */
 .dark-mode .message-list-overlay {
   background-color: #1a1a1a;
 }

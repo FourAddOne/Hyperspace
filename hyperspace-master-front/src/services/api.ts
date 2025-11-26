@@ -1,9 +1,22 @@
 import axios from 'axios'
+import type { ResVO } from '../types/api'
+import { API_ENDPOINTS } from '../constants/api'
+
+export { API_ENDPOINTS }
+
+// 创建一个扩展的 AxiosInstance 类型，明确表示拦截器会返回 ResVO<T> 中的 T
+interface HyperspaceApiClient extends Omit<import('axios').AxiosInstance, 'get' | 'post' | 'put' | 'delete' | 'patch'> {
+  get<T = any>(url: string, config?: import('axios').AxiosRequestConfig): Promise<ResVO<T>>
+  post<T = any>(url: string, data?: any, config?: import('axios').AxiosRequestConfig): Promise<ResVO<T>>
+  put<T = any>(url: string, data?: any, config?: import('axios').AxiosRequestConfig): Promise<ResVO<T>>
+  delete<T = any>(url: string, config?: import('axios').AxiosRequestConfig): Promise<ResVO<T>>
+  patch<T = any>(url: string, data?: any, config?: import('axios').AxiosRequestConfig): Promise<ResVO<T>>
+}
 
 const apiClient = axios.create({
   baseURL: '/api',
   timeout: 10000
-})
+}) as HyperspaceApiClient
 
 // 请求拦截器
 apiClient.interceptors.request.use(
@@ -27,7 +40,7 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     // 检查是否是登出请求
-    const isLogoutRequest = error.config && error.config.url === '/user/logout';
+    const isLogoutRequest = error.config && error.config.url === API_ENDPOINTS.USER_LOGOUT;
     
     if ((error.response?.status === 401 || error.response?.status === 403) && !isLogoutRequest) {
       // token过期或无效，清除本地存储
@@ -40,20 +53,5 @@ apiClient.interceptors.response.use(
     return Promise.reject(error)
   }
 )
-
-// API端点
-export const API_ENDPOINTS = {
-  USER_LOGIN: '/user/login',
-  USER_REGISTER: '/user/register',
-  USER_INFO: '/user/info',
-  USER_SETTINGS: '/user/settings',
-  USER_LOGOUT: '/user/logout',
-  FILE_UPLOAD: '/file/upload',
-  USER_AVATAR: '/user/avatar',
-  FRIENDS_LIST: '/friends/list',
-  FRIEND_REQUEST: '/friends/request',
-  FRIEND_ACCEPT: '/friends/accept',
-  FRIEND_REJECT: '/friends/reject'
-}
 
 export default apiClient

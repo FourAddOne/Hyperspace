@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { defineComponent, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import apiClient from '../services/api'
+import apiClient, { API_ENDPOINTS } from '../services/api'
+import { useUserStore } from '../stores/userStore'
 import { saveToken, removeToken } from '../utils/auth'
 import { saveUserInfo } from '../utils/user'
-import { useUserStore } from '../stores/userStore'
+import type { ResVO } from '../types/api'
 
 const router = useRouter()
 const loading = ref(false)
@@ -85,7 +86,7 @@ const handleLogin = async () => {
     console.log('登录请求数据:', loginData)
     
     // 执行登录
-    const response = await apiClient.post('/user/login', loginData)
+    const response = await apiClient.post<ResVO<{ accessToken: string; refreshToken: string }>>(API_ENDPOINTS.USER_LOGIN, loginData)
     
     console.log('登录响应:', response)
     
@@ -93,11 +94,11 @@ const handleLogin = async () => {
     if (response && response.code === 200 && response.data) {
       // 保存token
       const { accessToken, refreshToken } = response.data
-      saveToken(accessToken, refreshToken)
+      saveToken(accessToken)
       
       try {
         // 获取用户信息
-        const userResponse = await apiClient.get('/user/info')
+        const userResponse = await apiClient.get(API_ENDPOINTS.USER_INFO)
         console.log('用户信息响应:', userResponse)
         if (userResponse && userResponse.code === 200) {
           // 保存用户信息到localStorage
@@ -107,7 +108,7 @@ const handleLogin = async () => {
         }
         
         // 获取用户设置
-        const settingsResponse = await apiClient.get('/user/settings')
+        const settingsResponse = await apiClient.get(API_ENDPOINTS.USER_SETTINGS)
         console.log('用户设置响应:', settingsResponse)
         if (settingsResponse && settingsResponse.code === 200) {
           // 处理背景图片URL

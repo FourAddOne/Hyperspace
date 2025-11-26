@@ -68,7 +68,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import apiClient from '../services/api'
+import apiClient, { API_ENDPOINTS } from '../services/api'
 import { getFullAvatarUrl } from '../utils/user'
 
 const router = useRouter()
@@ -100,7 +100,7 @@ const searchUsers = async () => {
   searched.value = true
   
   try {
-    const response = await apiClient.get('/user/search', {
+    const response = await apiClient.get(API_ENDPOINTS.FRIEND_SEARCH, {
       params: { keyword: searchKeyword.value }
     })
     
@@ -120,7 +120,7 @@ const sendFriendRequest = async (userId: string) => {
   sendingRequests.value[userId] = true
   
   try {
-    await apiClient.post('/api/friends/request', null, {
+    await apiClient.post(API_ENDPOINTS.FRIEND_REQUEST, null, {
       params: { friendId: userId }
     })
     
@@ -151,7 +151,7 @@ const hasPendingRequest = (userId: string) => {
 // 加载好友列表
 const loadFriends = async () => {
   try {
-    const response = await apiClient.get('/api/friends/list')
+    const response = await apiClient.get(API_ENDPOINTS.FRIENDS_LIST)
     friends.value = response.data || []
   } catch (error: any) {
     console.error('加载好友列表失败:', error)
@@ -162,7 +162,7 @@ const loadFriends = async () => {
 // 加载好友请求
 const loadFriendRequests = async () => {
   try {
-    const response = await apiClient.get('/api/friends/requests')
+    const response = await apiClient.get(API_ENDPOINTS.FRIEND_REQUESTS)
     pendingRequests.value = response.data || []
   } catch (error: any) {
     console.error('加载好友请求失败:', error)
@@ -214,47 +214,6 @@ onMounted(() => {
   background: transparent;
   box-shadow: none;
   padding: 0;
-}
-
-.search-input :deep(.el-input__inner) {
-  border: 2px solid #e2e8f0;
-  border-radius: 8px 0 0 8px;
-  padding: 10px 15px;
-  transition: all 0.3s ease;
-  height: 40px;
-}
-
-.search-input :deep(.el-input__inner:focus) {
-  border-color: #0084ff;
-  box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.1);
-}
-
-.search-input :deep(.el-input-group__append) {
-  background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
-  border: 2px solid #0084ff;
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  padding: 0 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.search-input :deep(.el-input-group__append:hover) {
-  background: linear-gradient(135deg, #0066cc 0%, #004a99 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 132, 255, 0.3);
-}
-
-.search-input :deep(.el-button) {
-  color: white;
-  font-weight: 500;
-  padding: 0;
-  min-height: auto;
-  background: transparent;
-  border: none;
 }
 
 .search-input :deep(.el-input__inner) {
@@ -414,51 +373,88 @@ onMounted(() => {
   color: #ccc;
 }
 
-.dark-mode .user-email {
-  color: #ccc;
-}
-</style>
-
-<style>
 /* 全局样式覆盖Element Plus默认样式 */
+html.dark .el-page-header {
+  --el-page-header-text-color: #ffffff;
+  --el-page-header-back-arrow-color: #ffffff;
+}
+
+.el-page-header {
+  --el-page-header-text-color: #000000;
+  --el-page-header-back-arrow-color: #000000;
+  --el-page-header-title-font-size: 14px;
+}
+
 .el-page-header__left,
 .el-page-header__content {
-  color: #333333 !important;
+  color: var(--el-page-header-text-color) !important;
 }
 
 .el-page-header__left .el-button {
-  color: #333333 !important;
-  border-color: #333333 !important;
+  color: var(--el-page-header-text-color) !important;
+  border-color: var(--el-page-header-text-color) !important;
   background-color: transparent !important;
 }
 
 .el-page-header__arrow {
-  color: #333333 !important;
-  border-color: #333333 !important;
+  color: var(--el-page-header-text-color) !important;
+  border-color: var(--el-page-header-text-color) !important;
+}
+
+.el-page-header__back {
+  color: var(--el-page-header-text-color) !important;
+}
+
+.el-page-header__icon {
+  color: var(--el-page-header-text-color) !important;
 }
 
 .el-page-header__title {
-  color: #333333 !important;
+  color: var(--el-page-header-text-color) !important;
 }
 
-/* 暗色模式样式 */
-.dark-mode .el-page-header__left,
-.dark-mode .el-page-header__content {
+.el-page-header__content {
+  color: var(--el-page-header-text-color) !important;
+}
+
+/* 直接覆盖Element Plus组件样式以确保在亮色模式下有足够的对比度 */
+.el-page-header {
+  color: #000000 !important;
+}
+
+.el-page-header .el-page-header__left,
+.el-page-header .el-page-header__content {
+  color: #000000 !important;
+}
+
+.el-page-header .el-page-header__back,
+.el-page-header .el-page-header__icon,
+.el-page-header .el-page-header__title {
+  color: #000000 !important;
+}
+
+.el-page-header .el-page-header__arrow {
+  color: #000000 !important;
+  border-color: #000000 !important;
+}
+
+/* 暗色模式样式 - 确保在暗色模式下使用白色以提供足够对比度 */
+.dark-mode .el-page-header {
   color: #ffffff !important;
 }
 
-.dark-mode .el-page-header__left .el-button {
+.dark-mode .el-page-header .el-page-header__left,
+.dark-mode .el-page-header .el-page-header__content {
+  color: #ffffff !important;
+}
+
+.dark-mode .el-page-header .el-page-header__back,
+.dark-mode .el-page-header .el-page-header__icon,
+.dark-mode .el-page-header .el-page-header__title {
+  color: #ffffff !important;
+}
+
+.dark-mode .el-page-header .el-page-header__arrow {
   color: #ffffff !important;
   border-color: #ffffff !important;
-  background-color: transparent !important;
-}
-
-.dark-mode .el-page-header__arrow {
-  color: #ffffff !important;
-  border-color: #ffffff !important;
-}
-
-.dark-mode .el-page-header__title {
-  color: #ffffff !important;
-}
-</style>
+}</style>

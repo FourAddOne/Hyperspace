@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @Tag( name = "群组管理")
-@RequestMapping("/api/groups")
+@RequestMapping("/groups")
 public class GroupController {
 
     @Resource

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {ChatRound, User,Setting, SwitchButton, ChatLineSquare,SwitchFilled} from '@element-plus/icons-vue'
-import { getUserInfo, getFullAvatarUrl } from '../utils/user'
+import { getUserInfo } from '../utils/user'
 import { removeToken } from '../utils/auth'
 import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useUserStore } from '../stores/userStore'
@@ -43,14 +43,14 @@ const logout = () => {
       
       ElMessage.success('已退出登录')
       // 确保登录页面显示背景
-      router.push('/login')
+      await router.push('/login')
     } catch (error) {
       console.error('登出失败:', error)
       // 即使后端登出失败，也要清除本地状态以确保用户能退出
       userStore.clearUserInfo()
       removeToken()
       // 确保登录页面显示背景
-      router.push('/login')
+      await router.push('/login')
     }
   }).catch(() => {
     console.log('Logout cancelled') // 调试日志
@@ -123,8 +123,8 @@ const userAvatar = computed(() => {
   return avatarUrl || '/src/assets/logo.svg';
 })
 const username = computed(() => userStore.getUserName || '未知用户')
-const userStatus = computed(() => userStore.getUserInfo?.status || '在线')
-const statusClass = computed(() => userStatus.value === '在线' ? 'status-online' : 'status-offline')
+const userStatus = computed(() => userStore.getUserInfo?.loginStatus ? '在线' : '离线')
+const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-online' : 'status-offline')
 
 </script>
 
@@ -239,12 +239,34 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
   font-size: 10px;
 }
 
-.status-online {
+.user-status.status-online {
   color: #67c23a; /* 绿色 */
 }
 
-.status-offline {
-  color: #f56c6c; /* 红色 */
+.user-status.status-offline {
+  color: #000000; /* 黑色 */
+}
+
+/* 暗色模式样式 */
+.dark-mode .sidebar {
+  background-color: #2d2d2d;
+  border-right: 1px solid #444;
+}
+
+.dark-mode .user-profile-header {
+  border-bottom: 1px solid #444;
+}
+
+.dark-mode .username {
+  color: #f5f5f5;
+}
+
+.dark-mode .user-status.status-online {
+  color: #67c23a; /* 暗色模式下也使用绿色 */
+}
+
+.dark-mode .user-status.status-offline {
+  color: #909399; /* 暗色模式下使用灰色 */
 }
 
 .nav-menu {
@@ -309,7 +331,6 @@ const statusClass = computed(() => userStatus.value === '在线' ? 'status-onlin
   color: #333;
 }
 
-/* 暗色模式样式 */
 .dark-mode .sidebar {
   background-color: #2d2d2d;
   border-right: 1px solid #444;
