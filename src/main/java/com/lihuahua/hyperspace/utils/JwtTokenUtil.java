@@ -13,7 +13,6 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.concurrent.TimeUnit;
 
 
@@ -104,7 +103,7 @@ public class JwtTokenUtil  {
                 .setClaims(claims)
                 .setSubject(subject)
                 .setIssuedAt(new Date(currentTimeMillis))
-                .setExpiration(new Date(currentTimeMillis + expirationTime * 100000000L))
+                .setExpiration(new Date(currentTimeMillis + expirationTime * 1000)) // 修复此处的过期时间计算
                 .signWith(signingKey, SignatureAlgorithm.HS512)
                 .compact();
         

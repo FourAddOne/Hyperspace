@@ -2,13 +2,10 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient, { API_ENDPOINTS } from '../services/api'
-import { saveToken } from '../utils/auth'
+import { saveTokens } from '../utils/auth'
 import { ElMessage } from 'element-plus'
-import { useUserStore } from '../stores/userStore'
 
 const router = useRouter()
-const userStore = useUserStore()
-
 // 表单数据
 const registerForm = ref({
   userName: '',
@@ -20,7 +17,6 @@ const registerForm = ref({
 // 状态控制
 const loading = ref(false)
 const errorMessage = ref('')
-const successMessage = ref('')
 
 // 弹窗控制
 const showPopup = ref(false)
@@ -81,7 +77,7 @@ const handleRegister = async () => {
   errorMessage.value = ''
 
   try {
-    const response = await apiClient.post(API_ENDPOINTS.USER_REGISTER, registerData)
+    const response = await apiClient.post(API_ENDPOINTS.USER_REGISTER, registerForm.value)
       
     if (response && response.code !== 200) {
       throw new Error(response.msg || '注册失败')
@@ -90,7 +86,7 @@ const handleRegister = async () => {
     ElMessage.success('注册成功')
       
       // 注册成功后自动登录
-      await handleAutoLogin(registerData)
+      await handleAutoLogin(registerForm.value)
     } catch (error: any) {
       console.error('注册失败:', error)
       if (error.response && error.response.data && error.response.data.msg) {
@@ -116,7 +112,7 @@ const handleRegister = async () => {
       if (response && response.code === 200 && response.data) {
         // 保存token
         const { accessToken, refreshToken } = response.data
-        saveToken(accessToken, refreshToken)
+        saveTokens(accessToken, refreshToken)
         
         // 应用暗色模式设置
         document.body.classList.remove('login-page')
@@ -142,7 +138,7 @@ const handleRegister = async () => {
   }
 
 // 监听路由变化，确保正确添加背景类
-router.afterEach((to, from) => {
+router.afterEach((to) => {
   // 如果进入注册页面，确保添加背景类
   if (to.name === 'register') {
     document.body.classList.add('login-page')

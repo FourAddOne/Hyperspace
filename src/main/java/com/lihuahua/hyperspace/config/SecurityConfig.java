@@ -43,7 +43,9 @@ public class SecurityConfig {
                         .requestMatchers("/uploads/**").permitAll()
                         // 4. 文件上传接口
                         .requestMatchers("/file/upload").permitAll()
-                        // 5. Knife4j/Swagger 接口文档放行（补充完整路径）
+                        // 5. OSS相关接口
+                        .requestMatchers("/oss/**").authenticated()
+                        // 6. Knife4j/Swagger 接口文档放行（补充完整路径）
                         .requestMatchers(
                                 "/doc.html",                    // Knife4j 接口文档首页
                                 "/swagger-ui.html",             // 兼容 Swagger UI 路径
@@ -55,7 +57,7 @@ public class SecurityConfig {
                                 "/swagger-resources/configuration/ui",    // UI配置
                                 "/swagger-resources/configuration/security" // 安全配置
                         ).permitAll()
-                        // 5. 其他接口需要认证
+                        // 7. 其他接口需要认证
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

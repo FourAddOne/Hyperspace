@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { defineComponent, ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import apiClient, { API_ENDPOINTS } from '../services/api'
-import { useUserStore } from '../stores/userStore'
-import { saveToken, removeToken } from '../utils/auth'
+import { saveTokens, removeTokens } from '../utils/auth'
 import { saveUserInfo } from '../utils/user'
-import type { ResVO } from '../types/api'
+import { useUserStore } from '../stores/userStore'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const loading = ref(false)
@@ -24,7 +23,7 @@ const userStore = useUserStore()
 
 onMounted(() => {
   // 页面加载时清空可能存在的旧token
-  removeToken()
+  removeTokens()
   // 添加登录页面的CSS类
   document.body.classList.add('login-page')
 })
@@ -63,7 +62,7 @@ const handleLogin = async () => {
   try {
     // 获取客户端IP
     try {
-      const ipResponse = await apiClient.get('https://httpbin.org/ip')
+      const ipResponse = await fetch('https://httpbin.org/ip').then(res => res.json())
       loginForm.value.ip = ipResponse.origin
     } catch (ipError) {
       console.error('获取IP失败:', ipError)
@@ -86,7 +85,7 @@ const handleLogin = async () => {
     console.log('登录请求数据:', loginData)
     
     // 执行登录
-    const response = await apiClient.post<ResVO<{ accessToken: string; refreshToken: string }>>(API_ENDPOINTS.USER_LOGIN, loginData)
+    const response = await apiClient.post<{ accessToken: string; refreshToken: string }>(API_ENDPOINTS.USER_LOGIN, loginData)
     
     console.log('登录响应:', response)
     
@@ -94,7 +93,7 @@ const handleLogin = async () => {
     if (response && response.code === 200 && response.data) {
       // 保存token
       const { accessToken, refreshToken } = response.data
-      saveToken(accessToken)
+      saveTokens(accessToken, refreshToken)
       
       try {
         // 获取用户信息
@@ -169,7 +168,7 @@ const goToRegister = () => {
 }
 
 // 监听路由变化，确保正确添加背景类
-router.afterEach((to, from) => {
+router.afterEach((to) => {
   // 如果进入登录页面，确保添加背景类
   if (to.name === 'login') {
     document.body.classList.add('login-page')

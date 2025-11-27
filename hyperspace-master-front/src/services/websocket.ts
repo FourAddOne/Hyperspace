@@ -1,6 +1,6 @@
 import { Client, Stomp } from '@stomp/stompjs';
 import type { StompSubscription } from '@stomp/stompjs';
-import { getToken } from '@/utils/auth';
+import { getAccessToken } from '@/utils/auth';
 
 // 简单的日志级别控制
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -64,7 +64,7 @@ class WebSocketService {
       this.messageCallback = onMessageReceived;
     }
     
-    const token = getToken();
+    const token = getAccessToken();
     if (!token) {
       log.error('无法连接WebSocket: 没有访问令牌');
       this.scheduleReconnect();
@@ -147,7 +147,7 @@ class WebSocketService {
       // 设置重新连接定时器
       this.reconnectTimeout = setTimeout(() => {
         log.debug('尝试重新连接WebSocket...');
-        const token = getToken();
+        const token = getAccessToken();
         if (token) {
           this.connect(this.userStatusCallback!, this.messageCallback);
         }

@@ -20,7 +20,7 @@ export interface UserInfo {
 export interface UserSettings {
   userId: string;
   darkMode?: boolean;
-  backgroundImage?: string;
+  backgroundImage?: string | null;
   backgroundOpacity?: number;
   layout?: string;
   personalSignature?: string;

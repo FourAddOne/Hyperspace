@@ -5,6 +5,7 @@ import com.lihuahua.hyperspace.models.vo.ResVO;
 import com.lihuahua.hyperspace.models.vo.UserProfileVO;
 import com.lihuahua.hyperspace.server.UserServer;
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
+import io.jsonwebtoken.JwtException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -54,6 +55,35 @@ public class loginController {
         } catch (Exception e) {
             e.printStackTrace(); // 添加错误日志
             return ResVO.fail(e.getMessage());
+        }
+    }
+
+    @Operation(summary = "刷新访问令牌")
+    @PostMapping("/refresh")
+    public ResVO<Map<String, String>> refreshToken(@RequestHeader("Authorization") String refreshToken) {
+        try {
+            // 移除 "Bearer " 前缀
+            String token = refreshToken.replace("Bearer ", "");
+            
+            // 验证refreshToken
+            String userId = JwtTokenUtil.validateToken(token);
+            
+            if (userId != null) {
+                // 生成新的访问令牌
+                String newAccessToken = JwtTokenUtil.generateAccessToken(userId);
+                
+                // 构建返回数据
+                Map<String, String> resData = new HashMap<>();
+                resData.put("accessToken", newAccessToken);
+                
+                return ResVO.success(resData);
+            } else {
+                return ResVO.fail("无效的刷新令牌");
+            }
+        } catch (JwtException e) {
+            return ResVO.fail("刷新令牌验证失败: " + e.getMessage());
+        } catch (Exception e) {
+            return ResVO.fail("刷新令牌时发生错误: " + e.getMessage());
         }
     }
 

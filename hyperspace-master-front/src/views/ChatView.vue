@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed, onUnmounted, watch, onActivated } from 'vue'
-import { ElMessage } from 'element-plus'
-import apiClient, { API_ENDPOINTS } from '../services/api'
+import { ref, onMounted, onUnmounted, nextTick, watch,computed,onActivated } from 'vue'
 import { useRoute } from 'vue-router'
-import { getFullAvatarUrl, getUserInfo } from '../utils/user'
-import globalWebSocketManager from '../services/globalWebSocketManager'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/userStore'
-import type { CSSProperties } from 'vue'
+import { getUserInfo, getFullAvatarUrl } from '../utils/user'
+import apiClient, { API_ENDPOINTS, uploadFileToOSSDirectly } from '../services/api' // 添加 uploadFileToOSSDirectly
+import  globalWebSocketManager  from '../services/globalWebSocketManager'
+import type {CSSProperties} from "vue";
 
 // 获取路由实例
 const route = useRoute()
@@ -313,7 +313,7 @@ const selectConversation = async (conversation: any) => {
 
   // 标记消息为已读
   if (conversation.id) {
-    markMessagesAsRead(conversation.id);
+    await markMessagesAsRead(conversation.id);
   }
 
   // 确保在DOM更新后滚动到底部
@@ -484,28 +484,38 @@ const uploadFile = async (file: File, fileType: string, loadingText: string) => 
       duration: 0 // 不自动关闭
     });
 
-    // 创建FormData对象用于上传文件
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('fileType', fileType);
+    let fileUrl;
+    
+    // 检查是否启用直传OSS功能
+    if (import.meta.env.VITE_OSS_DIRECT_UPLOAD === 'true') {
+      // 使用直传OSS
+      fileUrl = await uploadFileToOSSDirectly(file, fileType);
+    } else {
+      // 使用原有的后端上传方式（保留作为备选方案）
+      // 创建FormData对象用于上传文件
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileType', fileType);
 
-    // 上传文件到服务器
-    const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
+      // 上传文件到服务器
+      const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      // 注意：由于apiClient的响应拦截器，response已经是response.data（ResVO对象）
+      // 所以我们可以直接访问code和msg属性
+      if (response && response.code === 200) {
+        fileUrl = response.data;
+      } else {
+        throw new Error(response?.msg || '上传失败');
       }
-    });
+    }
 
     // 关闭加载提示
     loadingMessage.close();
-
-    // 注意：由于apiClient的响应拦截器，response已经是response.data（ResVO对象）
-    // 所以我们可以直接访问code和msg属性
-    if (response && response.code === 200) {
-      return response.data;
-    } else {
-      throw new Error(response?.msg || '上传失败');
-    }
+    return fileUrl;
   } catch (error: any) {
     // 关闭加载提示
     ElMessage.closeAll();
@@ -851,7 +861,6 @@ onUnmounted(() => {
     clearInterval(unreadRefreshInterval.value);
   }
 })
-
 // 组件激活时检查是否有需要选择的好友
 onActivated(() => {
   // 检查是否有从好友列表传递过来的选中好友
@@ -879,7 +888,6 @@ onActivated(() => {
     }
   }
 });
-
 // 处理全局用户状态变更事件
 const handleGlobalUserStatusChange = (event: Event) => {
   console.log('ChatView收到用户状态变更事件');
@@ -1275,6 +1283,14 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 }
 
 .chat-status.status-offline {
+  color: #909399; /* 灰色 */
+}
+
+.dark-mode .chat-status.status-online {
+  color: #67c23a; /* 绿色 */
+}
+
+.dark-mode .chat-status.status-offline {
   color: #909399; /* 灰色 */
 }
 

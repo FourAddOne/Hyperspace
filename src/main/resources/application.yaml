@@ -40,7 +40,7 @@ knife4j:
 jwt:
   secret: ${JWT_SECRET:Hyp3rsp4c3_S3cr3t_K3y_F0r_JWT_T0k3n_Signing_With_HS512_Algorithm}
   expiration: ${JWT_EXPIRATION:43200}
-  long-expiration: ${JWT_LONG_EXPIRATION:43200}
+  long-expiration: ${JWT_LONG_EXPIRATION:1209600}
 
 file:
   upload:

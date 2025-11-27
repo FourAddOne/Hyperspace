@@ -5,6 +5,7 @@ export const API_ENDPOINTS = {
   USER_LOGIN: '/user/login',
   USER_REGISTER: '/user/register',
   USER_LOGOUT: '/user/logout',
+  USER_REFRESH: '/user/refresh',
   
   // 用户信息相关
   USER_PROFILE: '/user/profile',
@@ -18,6 +19,9 @@ export const API_ENDPOINTS = {
   FILE_UPLOAD: '/file/upload',
   FILE_DELETE: '/file/delete',
   USER_AVATAR: '/user/avatar',
+  
+  // OSS相关
+  OSS_POLICY: '/oss/policy',
   
   // 聊天相关
   CHAT_MESSAGES: '/chat/messages',

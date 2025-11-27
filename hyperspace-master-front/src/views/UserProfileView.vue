@@ -2,8 +2,8 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElSlider } from 'element-plus'
-import {getUserInfo, saveUserInfo, updateUserInfo} from '../utils/user'
-import apiClient, { API_ENDPOINTS } from '../services/api'
+import { getUserInfo, saveUserInfo, updateUserInfo } from '../utils/user'
+import apiClient, { API_ENDPOINTS, uploadFileToOSSDirectly } from '../services/api' // 添加 uploadFileToOSSDirectly
 import { useUserStore } from '../stores/userStore'
 import type { ResVO } from '../types/api'
 
@@ -16,8 +16,17 @@ const userInfo = ref({
   avatarUrl: ''
 })
 
+interface settings {
+  darkMode: boolean;
+  backgroundImage: string | null;
+  backgroundOpacity: number;
+  layout: string;
+  personalSignature: string;
+  gender: string;
+  age: number | null;
+}
 // 设置选项
-const settings = ref({
+const settings = ref<settings>({
   darkMode: false,
   backgroundImage: '',
   backgroundOpacity: 100, // 添加背景透明度属性
@@ -32,7 +41,7 @@ const isEditProfileDialogVisible = ref(false)
 const editedUserName = ref('')
 const editedPersonalSignature = ref('')
 const editedGender = ref('')
-const editedAge = ref(null)
+const editedAge = ref<number|null>(null)
 
 // 文件输入引用
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -66,11 +75,11 @@ const loadUserInfo = async () => {
       // 保存用户信息到store和localStorage
       userStore.setUserInfo(userData)
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载用户信息失败:', error)
     // 如果是认证错误，重定向到登录页
     if (error.response && error.response.status === 401) {
-      router.push('/login')
+      await router.push('/login')
     }
   }
 }
@@ -123,11 +132,11 @@ const loadUserSettings = async () => {
       // 应用暗色模式设置
       document.body.classList.toggle('dark-mode', settings.value.darkMode)
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载用户设置失败:', error)
     // 如果是认证错误，重定向到登录页
     if (error.response && error.response.status === 401) {
-      router.push('/login')
+      await router.push('/login')
     }
   }
 }
@@ -203,7 +212,7 @@ const handleFileSelect = () => {
 }
 
 // 获取完整的头像URL
-const getFullAvatarUrl = (avatarUrl: string) => {
+const getFullAvatarUrl = (avatarUrl: string | null) => {
   // 确保avatarUrl是字符串类型
   if (typeof avatarUrl !== 'string') {
     return '/src/assets/logo.svg';
@@ -230,62 +239,71 @@ const handleAvatarUpload = async (event: Event) => {
   
   if (file) {
     try {
-      // 创建FormData对象用于文件上传
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('fileType', 'avatar') // 添加文件类型参数
+      let avatarUrl;
       
-      // 上传文件到服务器
-      const response = await apiClient.post(API_ENDPOINTS.FILE_UPLOAD, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      })
-      
-      // 检查响应是否成功
-      if (response && response.code === 200) {
-        // 删除旧头像文件（如果存在且不是默认头像）
-        if (userInfo.value.avatarUrl) {
-          try {
-            await apiClient.delete('/file/delete', {
-              params: { fileUrl: userInfo.value.avatarUrl }
-            });
-          } catch (error) {
-            console.warn('删除旧头像失败:', error);
+      // 检查是否启用直传OSS功能
+      if (import.meta.env.VITE_OSS_DIRECT_UPLOAD === 'true') {
+        // 使用直传OSS
+        avatarUrl = await uploadFileToOSSDirectly(file, 'avatar');
+      } else {
+        // 使用原有的后端上传方式（保留作为备选方案）
+        // 创建FormData对象用于文件上传
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('fileType', 'avatar') // 添加文件类型参数
+        
+        // 上传文件到服务器
+        const response = await apiClient.post(API_ENDPOINTS.FILE_UPLOAD, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
           }
+        })
+        
+        // 检查响应是否成功
+        if (response && response.code === 200) {
+          // 获取头像URL
+          avatarUrl = response.data;
+        } else {
+          throw new Error(response?.msg || '上传失败')
         }
-        
-        // 获取头像URL
-        const avatarUrl = response.data;
-        
-        // 更新用户头像URL
-        userInfo.value.avatarUrl = avatarUrl;
-        
-        // 更新用户头像到数据库
+      }
+      
+      // 删除旧头像文件（如果存在且不是默认头像）
+      if (userInfo.value.avatarUrl) {
         try {
-          await apiClient.post(API_ENDPOINTS.USER_AVATAR, null, {
-            params: {
-              avatarUrl: avatarUrl
-            }
+          await apiClient.delete('/file/delete', {
+            params: { fileUrl: userInfo.value.avatarUrl }
           });
         } catch (error) {
-          console.error('更新数据库头像信息失败:', error);
-          ElMessage.error('头像更新失败，请重试');
-          return;
+          console.warn('删除旧头像失败:', error);
         }
-        
-        // 更新本地存储的用户信息
-        const currentUserInfo = getUserInfo()
-        if (currentUserInfo) {
-          const updatedUserInfo = { ...currentUserInfo, avatarUrl: avatarUrl }
-          saveUserInfo(updatedUserInfo)
-          userStore.setUserInfo(updatedUserInfo)
-        }
-        
-        ElMessage.success('头像已更新')
-      } else {
-        throw new Error(response?.msg || '上传失败')
       }
+      
+      // 更新用户头像URL
+      userInfo.value.avatarUrl = avatarUrl;
+      
+      // 更新用户头像到数据库
+      try {
+        await apiClient.post(API_ENDPOINTS.USER_AVATAR, null, {
+          params: {
+            avatarUrl: avatarUrl
+          }
+        });
+      } catch (error) {
+        console.error('更新数据库头像信息失败:', error);
+        ElMessage.error('头像更新失败，请重试');
+        return;
+      }
+      
+      // 更新本地存储的用户信息
+      const currentUserInfo = getUserInfo()
+      if (currentUserInfo) {
+        const updatedUserInfo = { ...currentUserInfo, avatarUrl: avatarUrl }
+        saveUserInfo(updatedUserInfo)
+        userStore.setUserInfo(updatedUserInfo)
+      }
+      
+      ElMessage.success('头像已更新')
     } catch (error: any) {
       console.error('头像上传失败:', error);
       console.error('错误详情:', {
@@ -306,65 +324,74 @@ const handleBackgroundUpload = async (event: Event) => {
   
   if (file) {
     try {
-      // 创建FormData对象用于文件上传
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('fileType', 'background') // 添加文件类型参数
+      let backgroundImageUrl;
       
-      // 上传文件到服务器
-      const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      })
-      
-      // 检查响应是否成功
-      if (response.code === 200) {
-        // 获取背景图片URL
-        const backgroundImageUrl = response.data;
-        
-        // 临时保存旧的背景图片URL用于错误回滚
-        const oldBackgroundImage = settings.value.backgroundImage;
-        
-        // 更新背景图片URL
-        settings.value.backgroundImage = backgroundImageUrl;
-        
-        // 保存设置到数据库
-        try {
-          await saveSettings();
-          
-          // 只有在保存设置成功后，才删除旧的背景图片
-          if (oldBackgroundImage) {
-            try {
-              await apiClient.delete(API_ENDPOINTS.FILE_DELETE, {
-                params: { fileUrl: oldBackgroundImage }
-              });
-            } catch (error) {
-              console.warn('删除旧背景图片失败:', error);
-            }
-          }
-        } catch (error) {
-          // 如果保存失败，回滚背景图片URL
-          settings.value.backgroundImage = oldBackgroundImage;
-          console.error('保存背景图片设置失败:', error);
-          ElMessage.error('背景图片保存失败，请重试');
-          return;
-        }
-        
-        // 添加下面这行代码来通知聊天界面更新背景
-        window.dispatchEvent(new CustomEvent('backgroundImageChanged', {
-          detail: { backgroundImage: backgroundImageUrl }
-        }));
-        
-        // 同时发送不透明度更新事件，确保透明度设置同步
-        window.dispatchEvent(new CustomEvent('backgroundOpacityChanged', {
-          detail: { opacity: settings.value.backgroundOpacity }
-        }));
-        
-        ElMessage.success('背景图片已更新')
+      // 检查是否启用直传OSS功能
+      if (import.meta.env.VITE_OSS_DIRECT_UPLOAD === 'true') {
+        // 使用直传OSS
+        backgroundImageUrl = await uploadFileToOSSDirectly(file, 'background');
       } else {
-        throw new Error(response?.msg || '上传失败')
+        // 使用原有的后端上传方式（保留作为备选方案）
+        // 创建FormData对象用于文件上传
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('fileType', 'background') // 添加文件类型参数
+        
+        // 上传文件到服务器
+        const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        })
+        
+        // 检查响应是否成功
+        if (response.code === 200) {
+          // 获取背景图片URL
+          backgroundImageUrl = response.data;
+        } else {
+          throw new Error(response?.msg || '上传失败')
+        }
       }
+      
+      // 临时保存旧的背景图片URL用于错误回滚
+      const oldBackgroundImage = settings.value.backgroundImage;
+      
+      // 更新背景图片URL
+      settings.value.backgroundImage = backgroundImageUrl;
+      
+      // 保存设置到数据库
+      try {
+        await saveSettings();
+        
+        // 只有在保存设置成功后，才删除旧的背景图片
+        if (oldBackgroundImage) {
+          try {
+            await apiClient.delete(API_ENDPOINTS.FILE_DELETE, {
+              params: { fileUrl: oldBackgroundImage }
+            });
+          } catch (error) {
+            console.warn('删除旧背景图片失败:', error);
+          }
+        }
+      } catch (error) {
+        // 如果保存失败，回滚背景图片URL
+        settings.value.backgroundImage = oldBackgroundImage;
+        console.error('保存背景图片设置失败:', error);
+        ElMessage.error('背景图片保存失败，请重试');
+        return;
+      }
+      
+      // 添加下面这行代码来通知聊天界面更新背景
+      window.dispatchEvent(new CustomEvent('backgroundImageChanged', {
+        detail: { backgroundImage: backgroundImageUrl }
+      }));
+      
+      // 同时发送不透明度更新事件，确保透明度设置同步
+      window.dispatchEvent(new CustomEvent('backgroundOpacityChanged', {
+        detail: { opacity: settings.value.backgroundOpacity }
+      }));
+      
+      ElMessage.success('背景图片已更新')
     } catch (error: any) {
       console.error('背景图片上传失败:', error);
       ElMessage.error('背景图片上传失败: ' + (error.message || '未知错误'))
@@ -392,11 +419,11 @@ const saveSettings = async () => {
       // 更新store中的背景状态
       userStore.setHasBackground(!!settings.value.backgroundImage)
     }
-    
-    ElMessage.success('设置已保存')
+    return true
   } catch (error) {
     console.error('保存设置失败:', error)
     ElMessage.error('保存设置失败')
+    return false
   }
 }
 
@@ -434,10 +461,8 @@ const toggleDarkMode = async () => {
 
 // 更改布局
 const changeLayout = async () => {
-  const success = await saveSettings() // 自动保存设置
-  if (success) {
-    ElMessage.success('布局已更新')
-  }
+  await saveSettings() // 自动保存设置
+  ElMessage.success('布局已更新')
 }
 
 // 清除背景图片
@@ -458,16 +483,14 @@ const clearBackground = async () => {
   
   try {
     // 保存设置到数据库
-    const success = await saveSettings();
+    await saveSettings();
     
-    if (success) {
-      // 添加下面这行代码来通知聊天界面更新背景
-      window.dispatchEvent(new CustomEvent('backgroundImageChanged', {
-        detail: { backgroundImage: '' }
-      }));
-      
-      ElMessage.success('背景已清除');
-    }
+    // 添加下面这行代码来通知聊天界面更新背景
+    window.dispatchEvent(new CustomEvent('backgroundImageChanged', {
+      detail: { backgroundImage: '' }
+    }));
+    
+    ElMessage.success('背景已清除');
   } catch (error) {
     console.error('清除背景失败:', error);
     ElMessage.error('背景清除失败，请重试');
@@ -475,10 +498,12 @@ const clearBackground = async () => {
 }
 
 // 背景透明度改变
-const onBackgroundOpacityChange = async (value: number) => {
-  settings.value.backgroundOpacity = value;
+const onBackgroundOpacityChange = async (value: number | number[]) => {
+  // 处理Arrayable<number>类型，可能是单个数字或数字数组
+  const numericValue = (Array.isArray(value) ? value[0] : value) ?? 0;
+  settings.value.backgroundOpacity = numericValue;
   // 保存到本地存储
-  localStorage.setItem('userBackgroundOpacity', value.toString());
+  localStorage.setItem('userBackgroundOpacity', numericValue.toString());
   
   // 自动保存设置（只保存透明度相关的设置）
   try {
@@ -506,13 +531,13 @@ const onBackgroundOpacityChange = async (value: number) => {
       }
     }
     
-    const response = await apiClient.post<ResVO<any>>(API_ENDPOINTS.USER_SETTINGS, settingsToUpdate);
+    const response = await apiClient.post<ResVO>(API_ENDPOINTS.USER_SETTINGS, settingsToUpdate);
     if (response && response.code === 200) {
       ElMessage.success('背景透明度已保存');
       
       // 发送自定义事件通知其他组件更新
       window.dispatchEvent(new CustomEvent('backgroundOpacityChanged', {
-        detail: { opacity: value }
+        detail: { opacity: numericValue }
       }));
     } else {
       throw new Error(response?.msg || '保存失败');
@@ -523,34 +548,14 @@ const onBackgroundOpacityChange = async (value: number) => {
   }
 }
 
-// 更新用户头像
-const updateAvatar = async (avatarUrl: string) => {
-  try {
-    // 修改为直接访问data，因为拦截器现在自动返回response.data
-    const response = await apiClient.post(API_ENDPOINTS.USER_AVATAR, null, {
-      params: {
-        avatarUrl: avatarUrl
-      }
-    })
-    return response;
-  } catch (error) {
-    console.error('更新头像失败:', error);
-    throw error;
-  }
-}
 
 onMounted(() => {
   // 从store中获取用户信息（如果存在）
   if (userStore.getUserInfo) {
     // 检查store中的用户信息结构
     const storedUserInfo = userStore.getUserInfo;
-    if (storedUserInfo.data) {
-      // 如果是{code, msg, data}结构，使用data字段
-      userInfo.value = { ...storedUserInfo.data }
-    } else {
-      // 直接使用用户信息
-      userInfo.value = { ...storedUserInfo }
-    }
+    // storedUserInfo已经是UserInfo类型，不需要再检查.data属性
+    userInfo.value = { ...storedUserInfo }
   }
   
   // 从store中获取用户设置（如果存在）

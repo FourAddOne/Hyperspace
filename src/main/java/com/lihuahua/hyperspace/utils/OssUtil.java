@@ -2,14 +2,25 @@ package com.lihuahua.hyperspace.utils;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSException;
+import com.aliyun.oss.common.utils.BinaryUtil;
 import com.aliyun.oss.model.*;
+import com.lihuahua.hyperspace.models.dto.OssPolicyDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -184,5 +195,79 @@ public class OssUtil {
         
         // 拼接完整URL
         return ossProperties.getOssDomainPrefix() + relativePath;
+    }
+    
+    /**
+     * 生成OSS上传策略，用于前端直传
+     * @param fileType 文件类型
+     * @return OssPolicyResult 包含上传策略的对象
+     */
+    public OssPolicyDTO generatePolicy(String fileType) {
+        // 设置过期时间（例如1小时）
+        long expireEndTime = System.currentTimeMillis() + 3600 * 1000;
+        Date expiration = new Date(expireEndTime);
+        
+        // 根据文件类型确定存储路径
+        String dir = "uploads/";
+        if ("avatar".equals(fileType)) {
+            dir = "avatars/";
+        } else if ("background".equals(fileType)) {
+            dir = "backgrounds/";
+        } else if ("message".equals(fileType)) {
+            dir = "messages/";
+        } else if ("file".equals(fileType)) {
+            dir = "files/";
+        }
+        
+        // 构造策略
+        String policyJson = "{\n" +
+                "    \"expiration\": \"" + formatISO8601Date(expiration) + "\",\n" +
+                "    \"conditions\": [\n" +
+                "      {\"bucket\": \"" + ossProperties.getBucketName() + "\"},\n" +
+                "      [\"starts-with\", \"$key\", \"" + dir + "\"],\n" +
+                "      {\"success_action_status\": \"200\"}\n" +
+                "    ]\n" +
+                "  }";
+        
+        String policyBase64 = BinaryUtil.toBase64String(policyJson.getBytes(StandardCharsets.UTF_8));
+        String signature = calculateSignature(ossProperties.getAccessKeySecret(), policyBase64);
+        
+        OssPolicyDTO result = new OssPolicyDTO();
+        result.setAccessKeyId(ossProperties.getAccessKeyId());
+        result.setPolicy(policyBase64);
+        result.setSignature(signature);
+        result.setDir(dir);
+        result.setHost("https://" + ossProperties.getBucketName() + "." + ossProperties.getEndpoint());
+        result.setExpire(String.valueOf(expireEndTime / 1000));
+        
+        return result;
+    }
+    
+    /**
+     * 计算签名
+     * @param keySecret AccessKeySecret
+     * @param policyBase64 Base64编码的策略
+     * @return 签名字符串
+     */
+    private String calculateSignature(String keySecret, String policyBase64) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA1");
+            mac.init(new SecretKeySpec(keySecret.getBytes(StandardCharsets.UTF_8), "HmacSHA1"));
+            byte[] signData = mac.doFinal(policyBase64.getBytes(StandardCharsets.UTF_8));
+            return BinaryUtil.toBase64String(signData);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new RuntimeException("计算签名失败", e);
+        }
+    }
+    
+    /**
+     * 格式化日期为ISO8601格式
+     * @param date 日期
+     * @return ISO8601格式的日期字符串
+     */
+    private String formatISO8601Date(Date date) {
+        DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        df.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        return df.format(date);
     }
 }

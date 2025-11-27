@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {ChatRound, User,Setting, SwitchButton, ChatLineSquare,SwitchFilled} from '@element-plus/icons-vue'
 import { getUserInfo } from '../utils/user'
-import { removeToken } from '../utils/auth'
+import { removeTokens } from '../utils/auth'
 import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useUserStore } from '../stores/userStore'
 
@@ -39,7 +39,7 @@ const logout = () => {
       
       // 清除本地状态
       userStore.clearUserInfo()
-      removeToken()
+      removeTokens()
       
       ElMessage.success('已退出登录')
       // 确保登录页面显示背景
@@ -48,7 +48,7 @@ const logout = () => {
       console.error('登出失败:', error)
       // 即使后端登出失败，也要清除本地状态以确保用户能退出
       userStore.clearUserInfo()
-      removeToken()
+      removeTokens()
       // 确保登录页面显示背景
       await router.push('/login')
     }

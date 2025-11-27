@@ -4,7 +4,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
 import { useUserStore } from './stores/userStore'
-import { getToken } from './utils/auth'
+import { getAccessToken } from './utils/auth'
 
 // 引入Element Plus
 import ElementPlus from 'element-plus'
@@ -39,7 +39,7 @@ router.beforeEach((to, from, next) => {
   const requiresAuth = !['login', 'register'].includes(to.name as string)
   
   // 检查用户是否已登录
-  const isLoggedIn = !!getToken()
+  const isLoggedIn = !!getAccessToken()
   
   // 如果目标是登录或注册页面，确保添加背景类
   if (to.name === 'login' || to.name === 'register') {

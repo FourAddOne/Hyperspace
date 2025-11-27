@@ -259,18 +259,6 @@ const loadFriendRequests = async () => {
   }
 }
 
-// 发送好友请求
-const sendFriendRequest = async (friendId: string) => {
-  try {
-    await apiClient.post(API_ENDPOINTS.FRIEND_REQUEST, null, {
-      params: { friendId }
-    })
-    ElMessage.success('好友请求已发送')
-  } catch (error: any) {
-    ElMessage.error('发送好友请求失败: ' + error.message)
-  }
-}
-
 // 接受好友请求
 const acceptFriendRequest = async (requesterId: string) => {
   try {
