@@ -44,7 +44,7 @@ public class OssUtil {
     /**
      * 上传文件到OSS，根据文件类型存储到不同的文件夹
      * @param file 要上传的文件
-     * @param fileType 文件类型 (avatar-头像, background-聊天背景, message-聊天图片, file-聊天文件, cover-封面图片, 其他默认为uploads)
+     * @param fileType 文件类型 (avatar-头像, background-聊天背景, message-聊天图片, file-聊天文件, cover-封面图片, comment-评论图片, 其他默认为uploads)
      * @return 返回文件在OSS中的路径
      */
     public String uploadFileToOSS(MultipartFile file, String fileType) throws IOException {
@@ -67,6 +67,8 @@ public class OssUtil {
             folder = "files/";
         } else if ("cover".equals(fileType)) {
             folder = "cover/"; // 封面图片存储在cover文件夹中
+        } else if ("comment".equals(fileType)) {
+            folder = "comments/"; // 评论图片存储在comments文件夹中
         }
         
         String uniqueFilename = folder + UUID.randomUUID().toString() + fileExtension;
@@ -221,6 +223,8 @@ public class OssUtil {
             dir = "files/";
         } else if ("cover".equals(fileType)) {
             dir = "cover/"; // 封面图片存储在cover文件夹中
+        } else if ("comment".equals(fileType)) {
+            dir = "comments/"; // 评论图片存储在comments文件夹中
         }
         
         // 构造策略

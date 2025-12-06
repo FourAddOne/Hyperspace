@@ -1,22 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, computed, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { 
-  ArrowLeft, 
-  Star, 
-  StarFilled, 
-  ChatDotSquare, 
-  Share, 
+import { useUserStore } from '../stores/userStore'
+import apiClient, { API_ENDPOINTS } from '../services/api'
+import { getFullAvatarUrl } from '../utils/user'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  ArrowLeft,
+  Star,
+  StarFilled,
+  ChatDotSquare,
+  Share,
   Picture,
   ArrowUp,
-  ArrowDown,
-  Sunny,
-  Moon
+  ArrowDown
 } from '@element-plus/icons-vue'
-import apiClient, { API_ENDPOINTS } from '../services/api'
-import { useUserStore } from '../stores/userStore'
-import LoadingView from '../components/LoadingView.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +26,7 @@ const comments = ref<any[]>([])
 const newComment = ref('')
 const commentImageFiles = ref<File[]>([])
 const commentImagePreviews = ref<string[]>([])
+const commentImageUrls = ref<string[]>([]) // 存储已上传到OSS的图片URL
 const likeLoading = ref(false) // 添加点赞加载状态
 const loading = ref(false) // 添加页面加载状态
 
@@ -384,9 +383,14 @@ const replyToComment = async (comment: any, replyContent: string) => {
   }
 }
 
+// 触发图片选择
+const triggerImageSelect = () => {
+  imageInput.value?.click()
+}
+
 // 处理图片选择
 const imageInput = ref()
-const handleImageSelect = (event: Event) => {
+const handleImageSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement
   if (target.files) {
     for (let i = 0; i < target.files.length; i++) {
@@ -394,6 +398,43 @@ const handleImageSelect = (event: Event) => {
       if (commentImageFiles.value.length < 9) {
         commentImageFiles.value.push(file)
         commentImagePreviews.value.push(URL.createObjectURL(file))
+        
+        // 上传图片到服务器
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+          
+          const response = await apiClient.post(
+            `/posts/comment/upload-image`,
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data'
+              }
+            }
+          )
+          
+          if (response.code === 200) {
+            // 将上传成功的图片URL保存起来
+            commentImageUrls.value.push(response.data)
+          } else {
+            ElMessage.error('图片上传失败: ' + response.msg)
+            // 移除预览图
+            const index = commentImageFiles.value.indexOf(file)
+            if (index > -1) {
+              commentImageFiles.value.splice(index, 1)
+              commentImagePreviews.value.splice(index, 1)
+            }
+          }
+        } catch (error: any) {
+          ElMessage.error('图片上传出错: ' + (error.message || '未知错误'))
+          // 移除预览图
+          const index = commentImageFiles.value.indexOf(file)
+          if (index > -1) {
+            commentImageFiles.value.splice(index, 1)
+            commentImagePreviews.value.splice(index, 1)
+          }
+        }
       }
     }
   }
@@ -403,30 +444,37 @@ const handleImageSelect = (event: Event) => {
 const removeCommentImage = (index: number) => {
   commentImageFiles.value.splice(index, 1)
   commentImagePreviews.value.splice(index, 1)
-}
-
-// 触发图片选择
-const triggerImageSelect = () => {
-  imageInput.value?.click()
+  if (commentImageUrls.value.length > index) {
+    commentImageUrls.value.splice(index, 1)
+  }
 }
 
 // 发布评论
 const publishComment = async () => {
-  if (!newComment.value.trim() && commentImageFiles.value.length === 0) {
+  if (!newComment.value.trim() && commentImageUrls.value.length === 0) {
     ElMessage.warning('请输入评论内容或选择图片')
     return
   }
   
   try {
     const postId = route.params.postId as string
+    
+    // 构造评论数据，包含图片URL
+    const commentData: any = {
+      userId: userStore.getUserInfo?.userId,
+      username: userStore.getUserInfo?.userName,
+      avatarUrl: userStore.getUserInfo?.avatarUrl,
+      content: newComment.value
+    }
+    
+    // 如果有上传的图片，则添加到imageUrls字段
+    if (commentImageUrls.value.length > 0) {
+      commentData.imageUrls = JSON.stringify(commentImageUrls.value)
+    }
+    
     const response = await apiClient.post(
       API_ENDPOINTS.POST_COMMENT_CREATE.replace('{postId}', postId),
-      {
-        userId: userStore.getUserInfo?.userId,
-        username: userStore.getUserInfo?.userName,
-        avatarUrl: userStore.getUserInfo?.avatarUrl,
-        content: newComment.value
-      }
+      commentData
     )
     
     if (response.code === 200) {
@@ -434,10 +482,11 @@ const publishComment = async () => {
       newComment.value = ''
       commentImageFiles.value = []
       commentImagePreviews.value = []
+      commentImageUrls.value = []
       // 重新加载评论
       loadComments()
     } else {
-      ElMessage.error('评论失败: ' + response.message)
+      ElMessage.error('评论失败: ' + response.msg)
     }
   } catch (error) {
     console.error('评论出错:', error)
@@ -638,21 +687,20 @@ onMounted(() => {
                 <div class="comment-author">{{ comment.username }}</div>
                 <div class="comment-time">{{ new Date(comment.createTime).toLocaleString() }}</div>
               </div>
-              <p class="comment-text">{{ comment.content }}</p>
-
-              <!-- 评论图片 -->
+              <!-- 优先显示图片，再显示文字内容 -->
               <div
-                  v-if="comment.mediaList && comment.mediaList.length > 0"
+                  v-if="comment.imageUrls && comment.imageUrls.length > 0"
                   class="comment-images"
               >
                 <img
-                    v-for="(media, index) in comment.mediaList"
+                    v-for="(imageUrl, index) in JSON.parse(comment.imageUrls)"
                     :key="index"
-                    :src="media.url"
+                    :src="imageUrl"
                     :alt="`评论图片${index + 1}`"
                     class="comment-image"
                 />
               </div>
+              <p v-if="comment.content" class="comment-text">{{ comment.content }}</p>
 
               <div class="comment-actions">
                 <el-button type="text" size="small" @click="likeComment(comment)">

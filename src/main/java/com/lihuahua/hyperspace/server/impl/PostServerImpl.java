@@ -563,6 +563,24 @@ public class PostServerImpl extends ServiceImpl<PostMapper, Post> implements Pos
                 Post post = objectMapper.readValue(postDetailJson, Post.class);
                 // 更新点赞数
                 post.setLikeCount(likeCount);
+                
+                // 确保头像和封面URL是完整URL
+                if (post.getAvatarUrl() != null && !post.getAvatarUrl().isEmpty()) {
+                    if (!post.getAvatarUrl().startsWith("http")) {
+                        post.setAvatarUrl(ossUtil.convertToFullUrl(post.getAvatarUrl()));
+                    }
+                } else {
+                    // 如果头像为空，设置默认头像
+                    post.setAvatarUrl("/src/assets/logo.svg");
+                }
+                
+                // 转换封面图片URL为完整URL
+                if (post.getCoverUrl() != null && !post.getCoverUrl().isEmpty()) {
+                    if (!post.getCoverUrl().startsWith("http")) {
+                        post.setCoverUrl(ossUtil.convertToFullUrl(post.getCoverUrl()));
+                    }
+                }
+                
                 // 重新序列化并更新缓存
                 String updatedPostDetailJson = objectMapper.writeValueAsString(post);
                 redisTemplate.opsForValue().set(postDetailCacheKey, updatedPostDetailJson, 30, TimeUnit.MINUTES);

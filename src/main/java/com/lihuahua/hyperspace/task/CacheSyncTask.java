@@ -6,6 +6,7 @@ import com.lihuahua.hyperspace.models.entity.Post;
 import com.lihuahua.hyperspace.models.entity.PostComment;
 import com.lihuahua.hyperspace.server.PostServer;
 import com.lihuahua.hyperspace.server.PostCommentServer;
+import com.lihuahua.hyperspace.utils.OssUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -32,6 +33,9 @@ public class CacheSyncTask {
 
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private OssUtil ossUtil;
 
     private static final String POST_DETAIL_PREFIX = "post_detail:";
     private static final String COMMENT_LIST_PREFIX = "post_comments:";
@@ -56,6 +60,23 @@ public class CacheSyncTask {
             List<Post> hotPosts = postServer.list(queryWrapper);
 
             for (Post post : hotPosts) {
+                // 转换头像URL为完整URL（无论什么情况都要确保是完整URL）
+                if (post.getAvatarUrl() != null && !post.getAvatarUrl().isEmpty()) {
+                    if (!post.getAvatarUrl().startsWith("http")) {
+                        post.setAvatarUrl(ossUtil.convertToFullUrl(post.getAvatarUrl()));
+                    }
+                } else {
+                    // 如果头像为空，设置默认头像
+                    post.setAvatarUrl("/src/assets/logo.svg");
+                }
+                
+                // 转换封面图片URL为完整URL
+                if (post.getCoverUrl() != null && !post.getCoverUrl().isEmpty()) {
+                    if (!post.getCoverUrl().startsWith("http")) {
+                        post.setCoverUrl(ossUtil.convertToFullUrl(post.getCoverUrl()));
+                    }
+                }
+
                 // 同步帖子详情到缓存
                 String postDetailKey = POST_DETAIL_PREFIX + post.getPostId();
                 redisTemplate.opsForValue().set(
@@ -114,6 +135,23 @@ public class CacheSyncTask {
 
                 // 同步这批帖子的缓存
                 for (Post post : posts) {
+                    // 转换头像URL为完整URL（无论什么情况都要确保是完整URL）
+                    if (post.getAvatarUrl() != null && !post.getAvatarUrl().isEmpty()) {
+                        if (!post.getAvatarUrl().startsWith("http")) {
+                            post.setAvatarUrl(ossUtil.convertToFullUrl(post.getAvatarUrl()));
+                        }
+                    } else {
+                        // 如果头像为空，设置默认头像
+                        post.setAvatarUrl("/src/assets/logo.svg");
+                    }
+                    
+                    // 转换封面图片URL为完整URL
+                    if (post.getCoverUrl() != null && !post.getCoverUrl().isEmpty()) {
+                        if (!post.getCoverUrl().startsWith("http")) {
+                            post.setCoverUrl(ossUtil.convertToFullUrl(post.getCoverUrl()));
+                        }
+                    }
+                    
                     // 同步帖子详情到缓存
                     String postDetailKey = POST_DETAIL_PREFIX + post.getPostId();
                     redisTemplate.opsForValue().set(

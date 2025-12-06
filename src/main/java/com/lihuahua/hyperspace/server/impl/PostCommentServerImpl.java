@@ -1,14 +1,16 @@
 package com.lihuahua.hyperspace.server.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lihuahua.hyperspace.mapper.PostCommentMapper;
 import com.lihuahua.hyperspace.models.entity.PostComment;
 import com.lihuahua.hyperspace.server.PostCommentServer;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lihuahua.hyperspace.server.PostLikeServer;
 import com.lihuahua.hyperspace.service.CommentLikeRabbitMQService;
 import com.lihuahua.hyperspace.models.entity.CommentLike;
 import com.lihuahua.hyperspace.server.CommentLikeServer;
+import com.lihuahua.hyperspace.utils.OssUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,9 @@ public class PostCommentServerImpl extends ServiceImpl<PostCommentMapper, PostCo
     @Autowired
     private PostLikeServer postLikeServer;
     
+    @Autowired
+    private OssUtil ossUtil;
+    
     private final RedisTemplate<String, String> redisTemplate;
     
     // ObjectMapper用于序列化和反序列化JSON
@@ -45,101 +50,6 @@ public class PostCommentServerImpl extends ServiceImpl<PostCommentMapper, PostCo
     
     public PostCommentServerImpl(RedisTemplate<String, String> redisTemplate) {
         this.redisTemplate = redisTemplate;
-    }
-    
-    /**
-     * 预热用户对评论的点赞数据到Redis缓存
-     * @param commentId 评论ID
-     * @param userId 用户ID
-     */
-    public void warmupUserCommentLikeData(String commentId, String userId) {
-        warmupUserCommentLikeData(commentId, userId, null, null);
-    }
-    
-    /**
-     * 预热用户对评论的点赞数据到Redis缓存
-     * @param commentId 评论ID
-     * @param userId 用户ID
-     * @param postLikedUsersKey 帖子点赞数据Redis键（可选）
-     * @param postId 帖子ID（可选）
-     */
-    public void warmupUserCommentLikeData(String commentId, String userId, String postLikedUsersKey, String postId) {
-        if (userId == null || userId.isEmpty()) {
-            System.out.println("用户ID为空，跳过预热");
-            return;
-        }
-        
-        try {
-            // 预热评论点赞数据
-            String commentLikedUsersKey = COMMENT_LIKED_USERS_PREFIX + commentId;
-            
-            // 检查Redis中是否已经有该用户的点赞状态
-            Boolean userLikedComment = redisTemplate.opsForSet().isMember(commentLikedUsersKey, userId);
-            
-            // 当userLikedComment为null时表示Redis中没有这个key
-            if (userLikedComment == null|| !userLikedComment) {
-                // Redis中没有该用户的点赞状态，从数据库查询
-                com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CommentLike> queryWrapper = 
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
-                queryWrapper.eq("comment_id", commentId);
-                queryWrapper.eq("user_id", userId);
-                
-                CommentLike existingLike = commentLikeServer.getOne(queryWrapper);
-                
-                if (existingLike != null) {
-                    // 用户已点赞该评论
-                    redisTemplate.opsForSet().add(commentLikedUsersKey, userId);
-                }
-                
-                // 设置过期时间
-                redisTemplate.expire(commentLikedUsersKey, 60, TimeUnit.MINUTES);
-            }
-        } catch (Exception e) {
-            System.err.println("预热用户评论点赞数据失败，用户ID: " + userId + ", 评论ID: " + commentId + ", 错误: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * 预热用户对帖子的点赞数据到Redis缓存
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return 帖子点赞数据Redis键
-     */
-    public String warmupUserPostLikeData(String postId, String userId) {
-        if (userId == null || userId.isEmpty()) {
-            System.out.println("用户ID为空，跳过帖子点赞预热");
-            return null;
-        }
-        
-        try {
-            // 预热帖子点赞数据
-            String postLikedUsersKey = "post_liked_users:" + postId;
-            Boolean userLikedPost = redisTemplate.opsForSet().isMember(postLikedUsersKey, userId);
-            
-            if (userLikedPost == null|| !userLikedPost) {
-                // Redis中没有该用户的点赞状态，从数据库查询
-                com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.lihuahua.hyperspace.models.entity.PostLike> queryWrapper = 
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
-                queryWrapper.eq("post_id", postId);
-                queryWrapper.eq("user_id", userId);
-                
-                com.lihuahua.hyperspace.models.entity.PostLike existingLike = 
-                    postLikeServer.getOne(queryWrapper);
-                
-                if (existingLike != null) {
-                    // 用户已点赞该帖子
-                    redisTemplate.opsForSet().add(postLikedUsersKey, userId);
-                }
-                
-                // 设置过期时间
-                redisTemplate.expire(postLikedUsersKey, 60, TimeUnit.MINUTES);
-            }
-            
-            return postLikedUsersKey;
-        } catch (Exception e) {
-            System.err.println("预热用户帖子点赞数据失败，用户ID: " + userId + ", 帖子ID: " + postId + ", 错误: " + e.getMessage());
-            return null;
-        }
     }
     
     /**
@@ -161,6 +71,9 @@ public class PostCommentServerImpl extends ServiceImpl<PostCommentMapper, PostCo
                     new com.fasterxml.jackson.core.type.TypeReference<List<PostComment>>() {}
                 );
                 
+                // 处理图片URL，确保是完整URL
+                processImageUrls(comments);
+                
                 return comments;
             } catch (Exception e) {
                 System.err.println("从Redis获取评论列表缓存时出错: " + e.getMessage());
@@ -175,10 +88,38 @@ public class PostCommentServerImpl extends ServiceImpl<PostCommentMapper, PostCo
         
         List<PostComment> comments = this.list(queryWrapper);
         
+        // 处理图片URL，确保是完整URL
+        processImageUrls(comments);
+        
         // 将评论列表存入Redis缓存，过期时间为30-60分钟（随机）
         try {
-            // 这里应该使用ObjectMapper将List<PostComment>转换为JSON字符串
-            // 实际项目中应该在这里实现序列化逻辑
+            // 在存入Redis前，确保图片URL是完整URL
+            for (PostComment comment : comments) {
+                if (comment.getImageUrls() != null && !comment.getImageUrls().isEmpty()) {
+                    try {
+                        // 将JSON字符串转换为List
+                        List<String> imageUrlList = objectMapper.readValue(
+                            comment.getImageUrls(), 
+                            new TypeReference<List<String>>() {}
+                        );
+                        
+                        // 转换为完整URL
+                        for (int i = 0; i < imageUrlList.size(); i++) {
+                            String imageUrl = imageUrlList.get(i);
+                            if (imageUrl != null && !imageUrl.startsWith("http")) {
+                                imageUrlList.set(i, ossUtil.convertToFullUrl(imageUrl));
+                            }
+                        }
+                        
+                        // 更新imageUrls字段为包含完整URL的JSON字符串
+                        String updatedImageUrlsJson = objectMapper.writeValueAsString(imageUrlList);
+                        comment.setImageUrls(updatedImageUrlsJson);
+                    } catch (Exception e) {
+                        System.err.println("处理评论图片URL时出错: " + e.getMessage());
+                    }
+                }
+            }
+            
             String commentsJson = objectMapper.writeValueAsString(comments);
             Random random = new Random();
             int expireMinutes = 30 + random.nextInt(31); // 30-60之间的随机数
@@ -188,6 +129,38 @@ public class PostCommentServerImpl extends ServiceImpl<PostCommentMapper, PostCo
         }
         
         return comments;
+    }
+    
+    /**
+     * 处理评论中的图片URL，确保是完整URL
+     * @param comments 评论列表
+     */
+    private void processImageUrls(List<PostComment> comments) {
+        for (PostComment comment : comments) {
+            if (comment.getImageUrls() != null && !comment.getImageUrls().isEmpty()) {
+                try {
+                    // 将JSON字符串转换为List
+                    List<String> imageUrlList = objectMapper.readValue(
+                        comment.getImageUrls(), 
+                        new TypeReference<List<String>>() {}
+                    );
+                    
+                    // 转换为完整URL
+                    for (int i = 0; i < imageUrlList.size(); i++) {
+                        String imageUrl = imageUrlList.get(i);
+                        if (imageUrl != null && !imageUrl.startsWith("http")) {
+                            imageUrlList.set(i, ossUtil.convertToFullUrl(imageUrl));
+                        }
+                    }
+                    
+                    // 更新imageUrls字段为包含完整URL的JSON字符串
+                    String updatedImageUrlsJson = objectMapper.writeValueAsString(imageUrlList);
+                    comment.setImageUrls(updatedImageUrlsJson);
+                } catch (Exception e) {
+                    System.err.println("处理评论图片URL时出错: " + e.getMessage());
+                }
+            }
+        }
     }
     
     /**
@@ -377,5 +350,100 @@ public class PostCommentServerImpl extends ServiceImpl<PostCommentMapper, PostCo
         }
         
         return isLiked != null && isLiked;
+    }
+    
+    /**
+     * 预热用户对评论的点赞数据到Redis缓存
+     * @param commentId 评论ID
+     * @param userId 用户ID
+     */
+    public void warmupUserCommentLikeData(String commentId, String userId) {
+        warmupUserCommentLikeData(commentId, userId, null, null);
+    }
+    
+    /**
+     * 预热用户对评论的点赞数据到Redis缓存
+     * @param commentId 评论ID
+     * @param userId 用户ID
+     * @param postLikedUsersKey 帖子点赞数据Redis键（可选）
+     * @param postId 帖子ID（可选）
+     */
+    public void warmupUserCommentLikeData(String commentId, String userId, String postLikedUsersKey, String postId) {
+        if (userId == null || userId.isEmpty()) {
+            System.out.println("用户ID为空，跳过预热");
+            return;
+        }
+        
+        try {
+            // 预热评论点赞数据
+            String commentLikedUsersKey = COMMENT_LIKED_USERS_PREFIX + commentId;
+            
+            // 检查Redis中是否已经有该用户的点赞状态
+            Boolean userLikedComment = redisTemplate.opsForSet().isMember(commentLikedUsersKey, userId);
+            
+            // 当userLikedComment为null时表示Redis中没有这个key
+            if (userLikedComment == null|| !userLikedComment) {
+                // Redis中没有该用户的点赞状态，从数据库查询
+                com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CommentLike> queryWrapper = 
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+                queryWrapper.eq("comment_id", commentId);
+                queryWrapper.eq("user_id", userId);
+                
+                CommentLike existingLike = commentLikeServer.getOne(queryWrapper);
+                
+                if (existingLike != null) {
+                    // 用户已点赞该评论
+                    redisTemplate.opsForSet().add(commentLikedUsersKey, userId);
+                }
+                
+                // 设置过期时间
+                redisTemplate.expire(commentLikedUsersKey, 60, TimeUnit.MINUTES);
+            }
+        } catch (Exception e) {
+            System.err.println("预热用户评论点赞数据失败，用户ID: " + userId + ", 评论ID: " + commentId + ", 错误: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 预热用户对帖子的点赞数据到Redis缓存
+     * @param postId 帖子ID
+     * @param userId 用户ID
+     * @return 帖子点赞数据Redis键
+     */
+    public String warmupUserPostLikeData(String postId, String userId) {
+        if (userId == null || userId.isEmpty()) {
+            System.out.println("用户ID为空，跳过帖子点赞预热");
+            return null;
+        }
+        
+        try {
+            // 预热帖子点赞数据
+            String postLikedUsersKey = "post_liked_users:" + postId;
+            Boolean userLikedPost = redisTemplate.opsForSet().isMember(postLikedUsersKey, userId);
+            
+            if (userLikedPost == null|| !userLikedPost) {
+                // Redis中没有该用户的点赞状态，从数据库查询
+                com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.lihuahua.hyperspace.models.entity.PostLike> queryWrapper = 
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+                queryWrapper.eq("post_id", postId);
+                queryWrapper.eq("user_id", userId);
+                
+                com.lihuahua.hyperspace.models.entity.PostLike existingLike = 
+                    postLikeServer.getOne(queryWrapper);
+                
+                if (existingLike != null) {
+                    // 用户已点赞该帖子
+                    redisTemplate.opsForSet().add(postLikedUsersKey, userId);
+                }
+                
+                // 设置过期时间
+                redisTemplate.expire(postLikedUsersKey, 60, TimeUnit.MINUTES);
+            }
+            
+            return postLikedUsersKey;
+        } catch (Exception e) {
+            System.err.println("预热用户帖子点赞数据失败，用户ID: " + userId + ", 帖子ID: " + postId + ", 错误: " + e.getMessage());
+            return null;
+        }
     }
 }

@@ -11,11 +11,13 @@ import com.lihuahua.hyperspace.server.PostCommentServer;
 import com.lihuahua.hyperspace.server.PostServer;
 import com.lihuahua.hyperspace.service.CommentLikeRabbitMQService;
 import com.lihuahua.hyperspace.utils.SnowflakeIdUtil;
+import com.lihuahua.hyperspace.utils.OssUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -45,6 +47,9 @@ public class PostController {
     
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private OssUtil ossUtil;
 
     // 评论列表缓存前缀
     private static final String COMMENT_LIST_PREFIX = "post_comments:";
@@ -123,6 +128,33 @@ public class PostController {
                 
                 comments = postCommentServer.list(queryWrapper);
                 
+                // 处理图片URL，确保是完整URL
+                for (PostComment comment : comments) {
+                    if (comment.getImageUrls() != null && !comment.getImageUrls().isEmpty()) {
+                        try {
+                            // 将JSON字符串转换为List
+                            List<String> imageUrlList = objectMapper.readValue(
+                                comment.getImageUrls(), 
+                                new TypeReference<List<String>>() {}
+                            );
+                            
+                            // 转换为完整URL
+                            for (int i = 0; i < imageUrlList.size(); i++) {
+                                String imageUrl = imageUrlList.get(i);
+                                if (imageUrl != null && !imageUrl.startsWith("http")) {
+                                    imageUrlList.set(i, ossUtil.convertToFullUrl(imageUrl));
+                                }
+                            }
+                            
+                            // 更新imageUrls字段为包含完整URL的JSON字符串
+                            String updatedImageUrlsJson = objectMapper.writeValueAsString(imageUrlList);
+                            comment.setImageUrls(updatedImageUrlsJson);
+                        } catch (Exception e) {
+                            System.err.println("处理评论图片URL时出错: " + e.getMessage());
+                        }
+                    }
+                }
+                
                 // 将评论列表存入Redis缓存，过期时间为30-60分钟（随机）
                 String commentsJson = objectMapper.writeValueAsString(comments);
                 Random random = new Random();
@@ -154,6 +186,31 @@ public class PostController {
     }
     
     /**
+     * 上传评论图片
+     *
+     * @param file 图片文件
+     * @return 上传结果
+     */
+    @PostMapping("/comment/upload-image")
+    public Map<String, Object> uploadCommentImage(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // 上传文件到OSS，存储在comments文件夹中
+            String filePath = ossUtil.uploadFileToOSS(file, "comment");
+            
+            response.put("code", 200);
+            response.put("message", "上传成功");
+            response.put("data", filePath);
+        } catch (Exception e) {
+            response.put("code", 500);
+            response.put("message", "上传失败: " + e.getMessage());
+        }
+        
+        return response;
+    }
+    
+    /**
      * 创建评论
      *
      * @param postId 帖子ID
@@ -164,57 +221,104 @@ public class PostController {
     @Transactional
     public Map<String, Object> createComment(
             @PathVariable String postId, 
-            @RequestBody PostComment comment) {
+            @RequestBody PostComment comment) throws JsonProcessingException {
+    
+    Map<String, Object> response = new HashMap<>();
+    
+    try {
+        // 设置评论ID和帖子ID
+        comment.setCommentId("comment_" + SnowflakeIdUtil.nextId());
+        comment.setPostId(postId);
+        comment.setCreateTime(new Date());
+        comment.setUpdateTime(new Date());
         
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            // 设置评论ID和帖子ID
-            comment.setCommentId("comment_" + SnowflakeIdUtil.nextId());
-            comment.setPostId(postId);
-            comment.setCreateTime(new Date());
-            comment.setUpdateTime(new Date());
-            
-            // 保存评论
-            boolean saved = postCommentServer.save(comment);
-            
-            if (saved) {
-                // 更新帖子的评论数
-                com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Post> queryWrapper = new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
-                queryWrapper.eq("post_id", postId);
-                Post post = postServer.getOne(queryWrapper);
-                if (post != null) {
-                    post.setCommentCount(post.getCommentCount() + 1);
-                    post.setUpdateTime(new Date());
-                    postServer.updateById(post);
-                }
+        // 处理图片URL
+        if (comment.getImageUrls() != null && !comment.getImageUrls().isEmpty()) {
+            try {
+                // 解析前端传递的JSON字符串
+                List<String> imageUrlList = objectMapper.readValue(
+                        comment.getImageUrls(), 
+                        new TypeReference<List<String>>() {});
                 
-                // 清除该帖子的评论缓存
-                String cacheKey = COMMENT_LIST_PREFIX + postId;
-                redisTemplate.delete(cacheKey);
-                
-                // 清除帖子详情缓存
-                String postDetailCacheKey = "post_detail:" + postId;
-                redisTemplate.delete(postDetailCacheKey);
-                
-                // 清除帖子列表缓存
-                clearPostListCache();
-                
-                response.put("code", 200);
-                response.put("message", "评论成功");
-                response.put("data", comment);
-            } else {
-                response.put("code", 500);
-                response.put("message", "评论失败");
+                // 将图片URL列表转换为JSON字符串存储
+                String imageUrlsJson = objectMapper.writeValueAsString(imageUrlList);
+                comment.setImageUrls(imageUrlsJson);
+            } catch (Exception e) {
+                System.err.println("处理评论图片URL时出错: " + e.getMessage());
             }
-        } catch (Exception e) {
-            response.put("code", 500);
-            response.put("message", "服务器内部错误: " + e.getMessage());
-            throw e; // 传播异常以触发事务回滚
         }
         
-        return response;
+        // 保存评论
+        boolean saved = postCommentServer.save(comment);
+        
+        if (saved) {
+            // 更新帖子的评论数
+            com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Post> queryWrapper = new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+            queryWrapper.eq("post_id", postId);
+            Post post = postServer.getOne(queryWrapper);
+            if (post != null) {
+                post.setCommentCount(post.getCommentCount() + 1);
+                post.setUpdateTime(new Date());
+                postServer.updateById(post);
+            }
+            
+            // 清除该帖子的评论缓存
+            String cacheKey = COMMENT_LIST_PREFIX + postId;
+            redisTemplate.delete(cacheKey);
+            
+            // 清除帖子详情缓存
+            String postDetailCacheKey = "post_detail:" + postId;
+            redisTemplate.delete(postDetailCacheKey);
+            
+            // 清除帖子列表缓存
+            clearPostListCache();
+            
+            // 重新从数据库获取评论，确保imageUrlList字段正确填充
+            PostComment savedComment = postCommentServer.getOne(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PostComment>()
+                    .eq("comment_id", comment.getCommentId())
+            );
+            
+            // 处理图片URL，确保是完整URL
+            if (savedComment.getImageUrls() != null && !savedComment.getImageUrls().isEmpty()) {
+                try {
+                    // 将JSON字符串转换为List
+                    List<String> imageUrlList = objectMapper.readValue(
+                        savedComment.getImageUrls(), 
+                        new TypeReference<List<String>>() {}
+                    );
+                    
+                    // 转换为完整URL
+                    for (int i = 0; i < imageUrlList.size(); i++) {
+                        String imageUrl = imageUrlList.get(i);
+                        if (imageUrl != null && !imageUrl.startsWith("http")) {
+                            imageUrlList.set(i, ossUtil.convertToFullUrl(imageUrl));
+                        }
+                    }
+                    
+                    // 更新imageUrls字段为包含完整URL的JSON字符串
+                    String updatedImageUrlsJson = objectMapper.writeValueAsString(imageUrlList);
+                    savedComment.setImageUrls(updatedImageUrlsJson);
+                } catch (Exception e) {
+                    System.err.println("处理评论图片URL时出错: " + e.getMessage());
+                }
+            }
+            
+            response.put("code", 200);
+            response.put("message", "评论成功");
+            response.put("data", savedComment);
+        } else {
+            response.put("code", 500);
+            response.put("message", "评论失败");
+        }
+    } catch (Exception e) {
+        response.put("code", 500);
+        response.put("message", "服务器内部错误: " + e.getMessage());
+        throw e; // 传播异常以触发事务回滚
     }
+    
+    return response;
+}
     
     /**
      * 点赞评论（使用RabbitMQ异步处理）
@@ -259,10 +363,10 @@ public class PostController {
     @Transactional
     public Map<String, Object> replyComment(
             @PathVariable String commentId,
-            @RequestBody PostComment comment) {
-    
+            @RequestBody PostComment comment) throws JsonProcessingException {
+
     Map<String, Object> response = new HashMap<>();
-    
+
     try {
         // 获取被回复的评论
         com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PostComment> queryWrapper = 
@@ -280,6 +384,22 @@ public class PostController {
             comment.setReplyToUsername(parentComment.getUsername());
             comment.setCreateTime(new Date());
             comment.setUpdateTime(new Date());
+            
+            // 处理图片URL
+            if (comment.getImageUrls() != null && !comment.getImageUrls().isEmpty()) {
+                try {
+                    // 解析前端传递的JSON字符串
+                    List<String> imageUrlList = objectMapper.readValue(
+                            comment.getImageUrls(), 
+                            new TypeReference<List<String>>() {});
+                    
+                    // 将图片URL列表转换为JSON字符串存储
+                    String imageUrlsJson = objectMapper.writeValueAsString(imageUrlList);
+                    comment.setImageUrls(imageUrlsJson);
+                } catch (Exception e) {
+                    System.err.println("处理评论图片URL时出错: " + e.getMessage());
+                }
+            }
             
             // 保存回复评论
             boolean saved = postCommentServer.save(comment);
@@ -306,9 +426,40 @@ public class PostController {
                 // 清除帖子列表缓存
                 clearPostListCache();
                 
+                // 重新从数据库获取评论，确保imageUrlList字段正确填充
+                PostComment savedComment = postCommentServer.getOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PostComment>()
+                        .eq("comment_id", comment.getCommentId())
+                );
+                
+                // 处理图片URL，确保是完整URL
+                if (savedComment.getImageUrls() != null && !savedComment.getImageUrls().isEmpty()) {
+                    try {
+                        // 将JSON字符串转换为List
+                        List<String> imageUrlList = objectMapper.readValue(
+                            savedComment.getImageUrls(), 
+                            new TypeReference<List<String>>() {}
+                        );
+                        
+                        // 转换为完整URL
+                        for (int i = 0; i < imageUrlList.size(); i++) {
+                            String imageUrl = imageUrlList.get(i);
+                            if (imageUrl != null && !imageUrl.startsWith("http")) {
+                                imageUrlList.set(i, ossUtil.convertToFullUrl(imageUrl));
+                            }
+                        }
+                        
+                        // 更新imageUrls字段为包含完整URL的JSON字符串
+                        String updatedImageUrlsJson = objectMapper.writeValueAsString(imageUrlList);
+                        savedComment.setImageUrls(updatedImageUrlsJson);
+                    } catch (Exception e) {
+                        System.err.println("处理评论图片URL时出错: " + e.getMessage());
+                    }
+                }
+                
                 response.put("code", 200);
                 response.put("message", "回复成功");
-                response.put("data", comment);
+                response.put("data", savedComment);
             } else {
                 response.put("code", 500);
                 response.put("message", "回复失败");
@@ -322,7 +473,7 @@ public class PostController {
         response.put("message", "服务器内部错误: " + e.getMessage());
         throw e; // 传播异常以触发事务回滚
     }
-    
+
     return response;
 }
     

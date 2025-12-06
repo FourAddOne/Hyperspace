@@ -55,6 +55,12 @@ public class PostComment {
     private String content;
 
     /**
+     * 图片URL（JSON格式存储多个图片URL）
+     */
+    @TableField("image_urls")
+    private String imageUrls;
+
+    /**
      * 父评论ID (用于回复评论)
      */
     @TableField("parent_id")
@@ -96,12 +102,6 @@ public class PostComment {
     @TableField("update_time")
     private Date updateTime;
 
-    /**
-     * 媒体资源列表（非数据库字段，用于传输）
-     */
-    @TableField(exist = false)
-    private List<PostMedia> mediaList;
-    
     /**
      * 当前用户是否已点赞（非数据库字段，用于传输）
      */
