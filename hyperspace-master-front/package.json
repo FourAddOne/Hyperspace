@@ -14,9 +14,11 @@
     "type-check": "vue-tsc --build"
   },
   "dependencies": {
+    "@opentiny/fluent-editor": "^3.25.6",
     "@stomp/stompjs": "^7.2.1",
     "axios": "^1.13.2",
     "element-plus": "^2.11.7",
+    "quill": "^2.0.3",
     "sockjs-client": "^1.6.1",
     "vue": "^3.5.22",
     "vue-router": "^4.6.3"

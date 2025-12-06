@@ -1,6 +1,8 @@
-import { Client, Stomp } from '@stomp/stompjs';
+import { Client} from '@stomp/stompjs';
 import type { StompSubscription } from '@stomp/stompjs';
-import { getAccessToken } from '@/utils/auth';
+import { getAccessToken, getRefreshToken, saveTokens, removeTokens } from '@/utils/auth';
+import { removeUserInfo } from '@/utils/user';
+import apiClient, { API_ENDPOINTS } from '@/services/api';
 
 // 简单的日志级别控制
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -8,21 +10,31 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 const log = {
   debug: (...args: any[]) => {
     if (isDevelopment) {
-      console.log('[DEBUG]', ...args);
+      console.debug('[WebSocket][DEBUG]', ...args);
     }
   },
   info: (...args: any[]) => {
     if (isDevelopment) {
-      console.log('[INFO]', ...args);
+      console.info('[WebSocket][INFO]', ...args);
     }
   },
   warn: (...args: any[]) => {
-    console.warn('[WARN]', ...args);
+    if (isDevelopment) {
+      console.warn('[WebSocket][WARN]', ...args);
+    }
   },
   error: (...args: any[]) => {
-    console.error('[ERROR]', ...args);
+    if (isDevelopment) {
+      console.error('[WebSocket][ERROR]', ...args);
+    }
   }
 };
+
+// Base64解码函数
+function base64Decode(base64String: string): string {
+  // 使用window.atob进行解码，并通过类型断言解决类型问题
+  return decodeURIComponent(escape(window.atob(base64String)));
+}
 
 class WebSocketService {
   private client: Client | null = null;
@@ -34,8 +46,86 @@ class WebSocketService {
   private maxReconnectAttempts = 5;
   private reconnectAttempts = 0;
 
+  // 检查并刷新令牌
+  private async checkAndRefreshToken(): Promise<string | null> {
+    const accessToken = getAccessToken();
+    const refreshToken = getRefreshToken();
+
+    if (!accessToken || !refreshToken) {
+      log.error('缺少访问令牌或刷新令牌');
+      // 通知应用需要重新登录
+      window.dispatchEvent(new CustomEvent('auth-expired'));
+      return null;
+    }
+
+    // 解析JWT令牌以检查过期时间
+    try {
+      // 修复atob类型问题
+      const tokenParts = accessToken.split('.');
+      if (tokenParts.length !== 3) {
+        throw new Error('无效的JWT令牌格式');
+      }
+      
+      const payloadBase64 = tokenParts[1];
+      // 检查payloadBase64是否为undefined
+      if (!payloadBase64) {
+        throw new Error('JWT令牌负载部分为空');
+      }
+      
+      // 使用自定义函数代替atob以避免类型问题
+      const payloadString = base64Decode(payloadBase64);
+      const payload = JSON.parse(payloadString);
+      const exp = payload.exp;
+      const now = Math.floor(Date.now() / 1000);
+
+      // 如果令牌已经过期或者将在1分钟内过期，则刷新
+      if (exp <= now + 60) {
+        log.info('访问令牌即将过期，尝试刷新令牌');
+
+        try {
+          const response = await apiClient.post(API_ENDPOINTS.USER_REFRESH, {}, {
+            headers: {
+              Authorization: `Bearer ${refreshToken}`
+            }
+          });
+
+          if (response && response.code === 200) {
+            const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data;
+            saveTokens(newAccessToken, newRefreshToken);
+            log.info('令牌刷新成功');
+            return newAccessToken;
+          } else {
+            log.error('刷新令牌失败:', response?.msg);
+            // 刷新令牌失败，清除令牌并通知应用需要重新登录
+            removeTokens();
+            removeUserInfo();
+            window.dispatchEvent(new CustomEvent('auth-expired'));
+            return null;
+          }
+        } catch (error) {
+          log.error('刷新令牌时发生错误:', error);
+          // 刷新令牌失败，清除令牌并通知应用需要重新登录
+          removeTokens();
+          removeUserInfo();
+          window.dispatchEvent(new CustomEvent('auth-expired'));
+          return null;
+        }
+      } else {
+        // 令牌仍然有效
+        return accessToken;
+      }
+    } catch (error) {
+      log.error('解析JWT令牌时出错:', error);
+      // 解析令牌出错，清除令牌并通知应用需要重新登录
+      removeTokens();
+      removeUserInfo();
+      window.dispatchEvent(new CustomEvent('auth-expired'));
+      return null;
+    }
+  }
+
   // 连接到WebSocket服务器
-  connect(
+  async connect(
     onUserStatusChange: (data: any) => void, 
     onMessageReceived?: (data: any) => void
   ) {
@@ -64,10 +154,12 @@ class WebSocketService {
       this.messageCallback = onMessageReceived;
     }
     
-    const token = getAccessToken();
+    // 检查并刷新令牌
+    const token = await this.checkAndRefreshToken();
     if (!token) {
-      log.error('无法连接WebSocket: 没有访问令牌');
-      this.scheduleReconnect();
+      log.error('无法连接WebSocket: 无法获取有效的访问令牌');
+      // 不再安排重新连接，因为已经触发了auth-expired事件
+      // this.scheduleReconnect();
       return;
     }
 
@@ -79,16 +171,22 @@ class WebSocketService {
       },
       // 启用STOMP客户端调试模式
       debug: function (str) {
-        // 启用调试日志
-        log.debug('[STOMP]', str);
+        // 生产环境不输出STOMP调试日志
       },
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
     });
 
+    // console.log('[WebSocket] STOMP客户端配置:', {
+    //   brokerURL: 'ws://localhost:8080/ws',
+    //   connectHeaders: {
+    //     Authorization: `Bearer ${token}`
+    //   }
+    // });
+
     // 连接成功回调
-    this.client.onConnect = (frame) => {
+    this.client.onConnect = () => {
       log.info('WebSocket连接成功');
       this.connected = true;
       this.reconnectAttempts = 0; // 重置重连尝试次数
@@ -147,9 +245,12 @@ class WebSocketService {
       // 设置重新连接定时器
       this.reconnectTimeout = setTimeout(() => {
         log.debug('尝试重新连接WebSocket...');
-        const token = getAccessToken();
-        if (token) {
-          this.connect(this.userStatusCallback!, this.messageCallback);
+        // 修复类型错误，确保传递正确的参数类型
+        if (this.userStatusCallback) {
+          this.connect(this.userStatusCallback, this.messageCallback || undefined);
+        } else {
+          // 如果userStatusCallback为null，创建一个空函数作为默认回调
+          this.connect(() => {}, this.messageCallback || undefined);
         }
       }, 3000 * this.reconnectAttempts); // 指数退避策略
     } else {

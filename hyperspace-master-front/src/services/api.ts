@@ -44,9 +44,12 @@ const processQueue = (error: any, token: string | null = null) => {
 // 请求拦截器
 apiClient.interceptors.request.use(
   (config) => {
-    const token = getAccessToken()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // 只有在没有设置Authorization头部时才添加访问令牌
+    if (!config.headers.Authorization) {
+      const token = getAccessToken()
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
     }
     return config
   },
@@ -98,8 +101,13 @@ apiClient.interceptors.response.use(
           // 注意：直接使用axios.post返回的是AxiosResponse对象
           // 需要通过response.data访问实际的响应数据
           if (response && response.data && response.code === 200) {
-            const { accessToken } = response.data
+            const { accessToken, refreshToken: newRefreshToken } = response.data
             saveAccessToken(accessToken)
+            if (newRefreshToken) {
+              saveTokens(accessToken, newRefreshToken)
+            } else {
+              saveAccessToken(accessToken)
+            }
             
             // 更新原始请求的token
             originalRequest.headers.Authorization = `Bearer ${accessToken}`
@@ -111,7 +119,15 @@ apiClient.interceptors.response.use(
             // 修复：使用apiClient的request方法而不是直接调用apiClient
             return apiClient.request(originalRequest)
           } else {
-            throw new Error('刷新令牌失败')
+            // 刷新令牌失败，清除令牌并跳转到登录页
+            removeTokens()
+            removeUserInfo()
+            processQueue(new Error('刷新令牌失败'), null)
+            
+            // 通知应用需要重新登录
+            window.dispatchEvent(new CustomEvent('auth-expired'))
+            
+            return Promise.reject(new Error('刷新令牌失败'))
           }
         } catch (refreshError) {
           // 刷新失败，清除令牌并跳转到登录页
@@ -127,13 +143,14 @@ apiClient.interceptors.response.use(
           isRefreshing = false
         }
       } else {
-        // 没有refreshToken，直接清除认证信息
+        // 没有refreshToken，直接清除认证信息并跳转到登录页
         removeTokens()
         removeUserInfo()
         isRefreshing = false
         
         // 通知应用需要重新登录
         window.dispatchEvent(new CustomEvent('auth-expired'))
+        return Promise.reject(new Error('缺少刷新令牌'))
       }
     }
     
@@ -188,7 +205,6 @@ export const uploadFileToOSSDirectly = async (file: File, fileType: string): Pro
     const fileUrl = `${host}/${key}`;
     return fileUrl;
   } catch (error: any) {
-    console.error('直传OSS失败:', error);
     if (error.isAxiosError && error.code === 'ERR_NETWORK') {
       throw new Error('OSS上传网络错误，请检查OSS CORS配置是否正确');
     }

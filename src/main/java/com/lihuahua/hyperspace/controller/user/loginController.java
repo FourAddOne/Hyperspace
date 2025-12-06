@@ -9,8 +9,11 @@ import io.jsonwebtoken.JwtException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -19,6 +22,8 @@ import java.util.Objects;
 @RestController
 @RequestMapping("/user")
 public class loginController {
+
+    private static final Logger logger = LoggerFactory.getLogger(loginController.class);
 
     @Resource
     private UserServer userServer;
@@ -62,27 +67,41 @@ public class loginController {
     @PostMapping("/refresh")
     public ResVO<Map<String, String>> refreshToken(@RequestHeader("Authorization") String refreshToken) {
         try {
+            logger.info("开始处理令牌刷新请求");
+            logger.info("接收到的完整Authorization头部: {}", refreshToken);
+            
             // 移除 "Bearer " 前缀
             String token = refreshToken.replace("Bearer ", "");
+            logger.info("提取后的令牌: {}", token);
             
-            // 验证refreshToken
-            String userId = JwtTokenUtil.validateToken(token);
+            // 使用专用的refreshToken验证方法
+            String userId = JwtTokenUtil.validateRefreshToken(token);
+            logger.info("验证refreshToken结果，用户ID: {}", userId);
             
             if (userId != null) {
-                // 生成新的访问令牌
+                logger.info("刷新令牌验证成功，用户ID: {}", userId);
+                
+                // 生成新的访问令牌和刷新令牌
                 String newAccessToken = JwtTokenUtil.generateAccessToken(userId);
+                String newRefreshToken = JwtTokenUtil.generateRefreshToken(userId);
+                logger.info("为用户 {} 生成新的访问令牌和刷新令牌", userId);
                 
                 // 构建返回数据
                 Map<String, String> resData = new HashMap<>();
                 resData.put("accessToken", newAccessToken);
+                resData.put("refreshToken", newRefreshToken);
                 
+                logger.info("成功刷新令牌，准备返回响应");
                 return ResVO.success(resData);
             } else {
+                logger.warn("无效的刷新令牌: {}", token);
                 return ResVO.fail("无效的刷新令牌");
             }
         } catch (JwtException e) {
+            logger.error("刷新令牌验证失败", e);
             return ResVO.fail("刷新令牌验证失败: " + e.getMessage());
         } catch (Exception e) {
+            logger.error("刷新令牌时发生错误", e);
             return ResVO.fail("刷新令牌时发生错误: " + e.getMessage());
         }
     }
@@ -94,7 +113,7 @@ public class loginController {
             // 移除 "Bearer " 前缀
             String jwt = token.replace("Bearer ", "");
             
-            // 验证并获取用户ID
+            // 验证并获取用户ID（可以使用任意一种令牌）
             String userId = JwtTokenUtil.validateToken(jwt);
             
             // 即使token无效，我们也应该清除本地状态
@@ -102,8 +121,6 @@ public class loginController {
                 // 如果用户ID有效，则执行登出逻辑
                 Boolean result = userServer.logout(userId);
                 if (result) {
-                    // 从Redis中移除token
-                    JwtTokenUtil.removeTokenFromRedis(userId);
                     return ResVO.success("注销成功");
                 }
             } else {

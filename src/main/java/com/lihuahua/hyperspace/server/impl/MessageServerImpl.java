@@ -7,7 +7,6 @@ import com.lihuahua.hyperspace.models.dto.MessageDTO;
 import com.lihuahua.hyperspace.models.entity.Message;
 import com.lihuahua.hyperspace.models.entity.User;
 import com.lihuahua.hyperspace.server.MessageServer;
-import com.lihuahua.hyperspace.utils.SnowflakeIdUtil;
 import com.lihuahua.hyperspace.utils.OssUtil;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
@@ -15,10 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.beans.BeansException;
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -27,7 +22,6 @@ import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Calendar;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,7 +31,7 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
     
     @Resource
     private MessageMapper messageMapper;
-    
+
     @Resource
     private UserMapper userMapper;
 
@@ -73,7 +67,14 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
             Message message = new Message();
             // 生成业务主键
             message.setMessageId("msg_" + java.util.UUID.randomUUID().toString().replace("-", ""));
-            message.setType(messageDTO.getType() != null ? messageDTO.getType() : "text");
+            
+            // 检查是否是引用消息，如果是则设置type为quote，否则使用传入的type或默认为text
+            if (messageDTO.getQuoteMessageId() != null && !messageDTO.getQuoteMessageId().isEmpty()) {
+                message.setType("quote");
+            } else {
+                message.setType(messageDTO.getType() != null ? messageDTO.getType() : "text");
+            }
+            
             message.setFromUserId(messageDTO.getFromUserId());
             message.setToTargetId(messageDTO.getToTargetId());
             message.setToTargetType("user");
@@ -100,18 +101,40 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
                 }
             }
             
+            // 设置引用消息ID和被引用消息的发送者名称
+            if (messageDTO.getQuoteMessageId() != null && !messageDTO.getQuoteMessageId().isEmpty()) {
+                message.setQuoteMessageId(messageDTO.getQuoteMessageId());
+                
+                // 获取被引用的消息并设置发送者名称
+                Message quotedMessage = messageMapper.getMessageById(messageDTO.getQuoteMessageId());
+                if (quotedMessage != null) {
+                    if (quotedMessage.getFromUsername() != null) {
+                        message.setQuoteMessageSenderName(quotedMessage.getFromUsername());
+                    } else {
+                        // 如果消息中没有发送者名称，则从用户表中查询
+                        User quotedMessageSender = userMapper.selectById(quotedMessage.getFromUserId());
+                        if (quotedMessageSender != null) {
+                            message.setQuoteMessageSenderName(quotedMessageSender.getUserName());
+                        }
+                    }
+                }
+            }
+            
+            // 设置发送者用户名（无论是否是引用消息）
+            User sender = userMapper.selectById(messageDTO.getFromUserId());
+            if (sender != null) {
+                message.setFromUsername(sender.getUserName());
+            }
+            
             message.setClientTimestamp(messageDTO.getClientTimestamp() != null ? messageDTO.getClientTimestamp() : System.currentTimeMillis());
             message.setServerTimestamp(System.currentTimeMillis());
             message.setStatus("success");
             message.setCreateTime(new Date());
             message.setUpdateTime(new Date());
             
-            System.out.println("准备插入消息: " + message);
-            
             // 使用自定义插入方法
             int result = messageMapper.insertMessage(message);
-            
-            System.out.println("消息插入结果: " + result);
+
             
             // 更新messageDTO的ID
             messageDTO.setMessageId(message.getMessageId());
@@ -121,10 +144,56 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
             // 检查是否是当天第一条消息
             messageDTO.setShowDate(isFirstMessageToday(message.getFromUserId(), message.getToTargetId()));
             
+            // 如果是引用消息，也填充引用消息的相关信息
+            if (message.getQuoteMessageId() != null && !message.getQuoteMessageId().isEmpty()) {
+                // 获取被引用的消息
+                Message quotedMessage = messageMapper.getMessageById(message.getQuoteMessageId());
+                if (quotedMessage != null) {
+                    // 设置被引用消息的发送者名称
+                         if (quotedMessage.getFromUsername() != null) {
+                        messageDTO.setQuoteMessageSenderName(quotedMessage.getFromUsername());
+                    } else {
+                        // 如果消息中没有发送者名称，则从用户表中查询
+                        User quotedMessageSender = userMapper.selectById(quotedMessage.getFromUserId());
+                        if (quotedMessageSender != null) {
+                            messageDTO.setQuoteMessageSenderName(quotedMessageSender.getUserName());
+                        }
+                    }
+
+                    // 根据被引用消息的类型设置不同的内容
+                    if ("image".equals(quotedMessage.getType())) {
+                        messageDTO.setQuoteMessageContent("[图片]");
+                        messageDTO.setQuoteMessageType("image");
+                        
+                        // 设置图片URL
+                        if (quotedMessage.getImageUrls() != null && !quotedMessage.getImageUrls().isEmpty()) {
+                            String fullUrl = ossUtil.convertToFullUrl(quotedMessage.getImageUrls());
+                            messageDTO.setQuoteMessageImageUrl(fullUrl);
+                        }
+                    } else if ("file".equals(quotedMessage.getType())) {
+                        messageDTO.setQuoteMessageContent("[文件] " + (quotedMessage.getFileName() != null ? quotedMessage.getFileName() : ""));
+                        messageDTO.setQuoteMessageType("file");
+                        
+                        // 设置文件相关信息
+                        if (quotedMessage.getFileUrls() != null && !quotedMessage.getFileUrls().isEmpty()) {
+                            String fullUrl = ossUtil.convertToFullUrl(quotedMessage.getFileUrls());
+                            messageDTO.setQuoteMessageFileUrl(fullUrl);
+                        }
+                        messageDTO.setQuoteMessageFileName(quotedMessage.getFileName());
+                        if (quotedMessage.getFileSize() != null) {
+                            messageDTO.setQuoteMessageFileSize(quotedMessage.getFileSize());
+                        }
+                    } else {
+                        // 默认文本消息
+                        messageDTO.setQuoteMessageContent(quotedMessage.getTextContent());
+                        messageDTO.setQuoteMessageType("text");
+                          }
+                }
+            }
+            
             return result > 0;
         } catch (Exception e) {
-            System.err.println("发送消息时出错: " + e.getMessage());
-            e.printStackTrace();
+                e.printStackTrace();
             return false;
         }
     }
@@ -168,6 +237,63 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
                     }
                 }
                 
+                // 处理引用消息
+                if (message.getQuoteMessageId() != null && !message.getQuoteMessageId().isEmpty()) {
+                    dto.setQuoteMessageId(message.getQuoteMessageId());
+                    
+                    // 直接从消息中获取被引用消息的发送者名称
+                    if (message.getQuoteMessageSenderName() != null) {
+                        dto.setQuoteMessageSenderName(message.getQuoteMessageSenderName());
+                    }
+                    
+                    // 获取被引用消息的内容
+                       Message quotedMessage = messageMapper.getMessageById(message.getQuoteMessageId());
+                       if (quotedMessage != null) {
+                        // 如果数据库中没有存储发送者名称，则设置它
+                        if (dto.getQuoteMessageSenderName() == null) {
+                            // 设置被引用消息的发送者名称
+                               if (quotedMessage.getFromUsername() != null) {
+                                dto.setQuoteMessageSenderName(quotedMessage.getFromUsername());
+                            } else {
+                                // 如果消息中没有发送者名称，则从用户表中查询
+                                User quotedMessageSender = userMapper.selectById(quotedMessage.getFromUserId());
+                                if (quotedMessageSender != null) {
+                                    dto.setQuoteMessageSenderName(quotedMessageSender.getUserName());
+                                }
+                            }
+                           }
+                        
+                        // 根据被引用消息的类型设置不同的内容
+                        if ("image".equals(quotedMessage.getType())) {
+                            dto.setQuoteMessageContent("[图片]");
+                            dto.setQuoteMessageType("image");
+                            
+                            // 设置图片URL
+                            if (quotedMessage.getImageUrls() != null && !quotedMessage.getImageUrls().isEmpty()) {
+                                String fullUrl = ossUtil.convertToFullUrl(quotedMessage.getImageUrls());
+                                dto.setQuoteMessageImageUrl(fullUrl);
+                            }
+                        } else if ("file".equals(quotedMessage.getType())) {
+                            dto.setQuoteMessageContent("[文件] " + (quotedMessage.getFileName() != null ? quotedMessage.getFileName() : ""));
+                            dto.setQuoteMessageType("file");
+                            
+                            // 设置文件相关信息
+                            if (quotedMessage.getFileUrls() != null && !quotedMessage.getFileUrls().isEmpty()) {
+                                String fullUrl = ossUtil.convertToFullUrl(quotedMessage.getFileUrls());
+                                dto.setQuoteMessageFileUrl(fullUrl);
+                            }
+                            dto.setQuoteMessageFileName(quotedMessage.getFileName());
+                            if (quotedMessage.getFileSize() != null) {
+                                dto.setQuoteMessageFileSize(quotedMessage.getFileSize());
+                            }
+                        } else {
+                            // 默认文本消息
+                            dto.setQuoteMessageContent(quotedMessage.getTextContent());
+                            dto.setQuoteMessageType("text");
+                         }
+                    }
+                }
+                
                 dto.setServerTimestamp(message.getServerTimestamp());
                 dto.setClientTimestamp(message.getClientTimestamp());
                 dto.setCreatedAt(new Date(message.getServerTimestamp()));
@@ -193,8 +319,7 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
             
             return messageDTOs;
         } catch (Exception e) {
-            System.err.println("获取聊天历史时出错: " + e.getMessage());
-            e.printStackTrace();
+             e.printStackTrace();
             return new ArrayList<>();
         }
     }
@@ -209,8 +334,7 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
                 unreadCounts.put(friendId, count);
             }
         } catch (Exception e) {
-            System.err.println("获取未读消息数量时出错: " + e.getMessage());
-            e.printStackTrace();
+              e.printStackTrace();
         }
         
         return unreadCounts;
@@ -243,8 +367,7 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
                 messageMapper.update(updateMessage, finalWrapper);
             }
         } catch (Exception e) {
-            System.err.println("标记消息为已读时出错: " + e.getMessage());
-            e.printStackTrace();
+              e.printStackTrace();
         }
     }
     
@@ -275,8 +398,19 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
             // 如果这是第一条消息，则返回true
             return count <= 1;
         } catch (Exception e) {
-            System.err.println("检查是否是当天第一条消息时出错: " + e.getMessage());
-            return false;
+               return false;
         }
+    }
+    
+    /**
+     * 根据消息ID查询消息
+     * 
+     * @param messageId 消息ID
+     * @return 消息对象
+     */
+    public Message getMessageById(String messageId) {
+        QueryWrapper<Message> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("message_id", messageId);
+        return messageMapper.selectOne(queryWrapper);
     }
 }

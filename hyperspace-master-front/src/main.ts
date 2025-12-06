@@ -4,7 +4,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
 import { useUserStore } from './stores/userStore'
-import { getAccessToken } from './utils/auth'
+import { getAccessToken, removeTokens } from './utils/auth'
+import { removeUserInfo } from './utils/user'
 
 // 引入Element Plus
 import ElementPlus from 'element-plus'
@@ -28,6 +29,16 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
 
+// 监听认证过期事件
+window.addEventListener('auth-expired', () => {
+  // 清除所有认证信息
+  removeTokens()
+  removeUserInfo()
+  
+  // 跳转到登录页
+  router.push('/login')
+})
+
 // 全局前置守卫，检查路由访问权限
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
@@ -46,6 +57,8 @@ router.beforeEach((to, from, next) => {
     document.body.classList.add('login-page')
   } else {
     document.body.classList.remove('login-page')
+    // 应用暗色模式设置（解决刷新后暗色模式丢失的问题）
+    document.body.classList.toggle('dark-mode', userStore.getDarkMode)
   }
   
   if (requiresAuth && !isLoggedIn) {

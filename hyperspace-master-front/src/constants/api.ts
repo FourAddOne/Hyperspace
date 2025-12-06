@@ -54,7 +54,15 @@ export const API_ENDPOINTS = {
   QUITGROUP: '/groups/quit',
   GROUPLIST: '/groups/list',
   GROUPMEMBERS: '/groups/members',
-  GROUPMESSAGE: '/groups/message'
+  GROUPMESSAGE: '/groups/message',
+  
+  // 帖子相关
+  POST_LIST: '/posts',
+  POST_DETAIL: '/posts/detail/{postId}',
+  POST_LIKE: '/posts/like',
+  POST_CREATE: '/posts/create',
+  POST_COMMENTS: '/posts/comments/{postId}',
+  POST_COMMENT_CREATE: '/posts/comment/create/{postId}'
 } as const;
 
 // HTTP方法常量

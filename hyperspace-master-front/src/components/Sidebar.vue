@@ -2,7 +2,7 @@
 import { onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {ChatRound, User,Setting, SwitchButton, ChatLineSquare,SwitchFilled} from '@element-plus/icons-vue'
+import {ChatRound, User,Setting, SwitchButton, ChatLineSquare,SwitchFilled, Compass} from '@element-plus/icons-vue'
 import { getUserInfo } from '../utils/user'
 import { removeTokens } from '../utils/auth'
 import apiClient, { API_ENDPOINTS } from '../services/api'
@@ -173,6 +173,14 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
           <SwitchFilled  class="nav-icon"/>
           <span>游戏</span>
         </li>
+        
+        <li
+            :class="{ active: $route.name === 'discover' }"
+            @click="$router.push('/discover')"
+        >
+          <Compass class="nav-icon"/>
+          <span>发现</span>
+        </li>
 
         <li 
           :class="{ active: $route.name === 'profile' }" 
@@ -289,6 +297,7 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
   cursor: pointer;
   color: #666;
   transition: all 0.3s ease;
+  position: relative;
 }
 
 .nav-menu li:hover {
@@ -299,6 +308,16 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
 .nav-menu li.active {
   background-color: #e0f0ff;
   color: #0084ff;
+}
+
+.nav-menu li.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  background-color: #0084ff;
 }
 
 .nav-icon {
@@ -331,19 +350,6 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
   color: #333;
 }
 
-.dark-mode .sidebar {
-  background-color: #2d2d2d;
-  border-right: 1px solid #444;
-}
-
-.dark-mode .user-profile-header {
-  border-bottom: 1px solid #444;
-}
-
-.dark-mode .username {
-  color: #f5f5f5;
-}
-
 .dark-mode .nav-menu li {
   color: #ccc;
 }
@@ -356,6 +362,10 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
 .dark-mode .nav-menu li.active {
   background-color: #1a3a4a;
   color: #409eff;
+}
+
+.dark-mode .nav-menu li.active::before {
+  background-color: #409eff;
 }
 
 .dark-mode .sidebar-footer {

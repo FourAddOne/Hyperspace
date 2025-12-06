@@ -1,6 +1,7 @@
 package com.lihuahua.hyperspace.filter;
 
 import com.lihuahua.hyperspace.utils.JwtTokenUtil;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,7 +38,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter implements Cha
     // 公开接口路径，不需要JWT验证
     private static final String[] PUBLIC_PATHS = {
         "/user/login",
-        "/user/register"
+        "/user/register",
+        "/user/refresh"  // 刷新令牌接口也不需要认证
     };
     
     /**
@@ -71,8 +73,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter implements Cha
             if (isValidJwtFormat(jwt)) {
                 try {
                     username = JwtTokenUtil.getUserIdFromToken(jwt);
+                } catch (ExpiredJwtException e) {
+                    // Token过期，记录日志但不立即拒绝请求
+                    logger.warn("Token已过期: " + e.getMessage());
                 } catch (Exception e) {
-                    // Token无效或过期
+                    // Token无效
                     logger.error("无法解析Token: " + e.getMessage());
                 }
             } else {
@@ -82,7 +87,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter implements Cha
 
         // 如果Token有效且未设置认证信息
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            String validatedUserId = JwtTokenUtil.validateToken(jwt);
+            // 使用accessToken验证方法
+            String validatedUserId = JwtTokenUtil.validateAccessToken(jwt);
             if (validatedUserId != null) {
                 // 设置认证信息到上下文
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
@@ -131,7 +137,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter implements Cha
                 String authHeader = authorization.get(0);
                 if (authHeader != null && authHeader.startsWith("Bearer ")) {
                     String jwt = authHeader.substring(7);
-                    String userId = JwtTokenUtil.validateToken(jwt);
+                    // WebSocket连接使用accessToken验证
+                    String userId = JwtTokenUtil.validateAccessToken(jwt);
                     if (userId != null) {
                         // 将用户ID设置到StompHeaderAccessor中
                         accessor.setUser(() -> userId);

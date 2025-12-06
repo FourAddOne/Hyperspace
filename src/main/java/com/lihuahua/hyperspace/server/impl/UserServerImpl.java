@@ -161,6 +161,8 @@ public class UserServerImpl implements UserServer {
         if (user != null) {
             user.setLoginStatus(false);
             userMapper.updateById(user);
+            // 从Redis中移除token
+            JwtTokenUtil.removeTokenFromRedis(userId);
             return true;
         }
         return false;

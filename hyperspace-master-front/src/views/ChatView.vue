@@ -8,18 +8,77 @@ import apiClient, { API_ENDPOINTS, uploadFileToOSSDirectly } from '../services/a
 import  globalWebSocketManager  from '../services/globalWebSocketManager'
 import type {CSSProperties} from "vue";
 
+// 定义消息对象接口
+interface Message {
+  messageId: string;
+  type: string;
+  text: string;
+  time: string;
+  isSent: boolean;
+  showDate: boolean;
+  createdAt: string;
+  clientTimestamp: number;
+  // 引用消息相关字段
+  quoteMessageId?: string;
+  quoteMessageContent?: string;
+  quoteMessageSenderName?: string;
+  // 图片消息相关字段
+  imageUrls?: string;
+  // 文件消息相关字段
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  [key: string]: any; // 允许其他属性
+}
+
+// 定义发送消息对象接口
+interface SendMessage {
+  type: string;
+  toTargetId: string;
+  toTargetType: string;
+  textContent?: string;
+  imageUrls?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  clientTimestamp: number;
+  quoteMessageId?: string;
+  [key: string]: any; // 允许其他属性
+}
 // 获取路由实例
 const route = useRoute()
 
 // 定义响应式数据
 const conversations = ref<any[]>([])
 const activeConversation = ref<any>(null)
-const messages = ref<any[]>([])
+const messages = ref<Message[]>([])
 const newMessage = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 const unreadCounts = ref<Map<string, number>>(new Map()) // 添加未读消息计数
 const unreadRefreshInterval = ref<number | null>(null) // 定时刷新未读消息的interval ID
 const selectedImage = ref<File | null>(null) // 选中的图片文件
+
+// 引用消息相关
+const quotedMessage = ref<Message | null>(null);
+
+// 设置引用消息的函数
+const setQuotedMessage = (message: Message) => {
+  quotedMessage.value = message;
+  console.log('设置引用消息:', message);
+  
+  // 设置焦点到输入框
+  nextTick(() => {
+    const inputElement = document.querySelector('.message-input textarea');
+    if (inputElement) {
+      (inputElement as HTMLTextAreaElement).focus();
+    }
+  });
+};
+
+// 取消引用消息
+const cancelQuotedMessage = () => {
+  quotedMessage.value = null;
+};
 
 // 获取用户store
 const userStore = useUserStore()
@@ -216,6 +275,9 @@ const handleUserStatusChange = (data: any) => {
 // 处理实时消息
 const handleRealTimeMessage = (message: any) => {
   console.log('收到实时消息:', message);
+  console.log('引用消息ID:', message.quoteMessageId);
+  console.log('引用消息内容:', message.quoteMessageContent);
+  console.log('引用消息发送者:', message.quoteMessageSenderName);
 
   // 检查消息是否已存在（避免重复显示）
   const exists = messages.value.some(msg => msg.messageId === message.messageId);
@@ -237,8 +299,19 @@ const handleRealTimeMessage = (message: any) => {
       time: message.serverTimestamp ? new Date(message.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }): new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isSent: message.fromUserId === getUserInfo()?.userId,
       showDate: message.showDate || false, // 如果后端提供了showDate属性则使用，否则默认为false
-      createdAt: message.serverTimestamp ? new Date(message.serverTimestamp).toISOString() : new Date().toISOString()
+      createdAt: message.serverTimestamp ? new Date(message.serverTimestamp).toISOString() : new Date().toISOString(),
+      // 引用消息相关字段
+      quoteMessageId: message.quoteMessageId || null,
+      quoteMessageContent: message.quoteMessageContent || null,
+      quoteMessageSenderName: message.quoteMessageSenderName || null,
+      quoteMessageType: message.quoteMessageType || null,
+      quoteMessageImageUrl: message.quoteMessageImageUrl || null,
+      quoteMessageFileUrl: message.quoteMessageFileUrl || null,
+      quoteMessageFileName: message.quoteMessageFileName || null,
+      quoteMessageFileSize: message.quoteMessageFileSize || null
     };
+    
+    console.log('处理后的消息对象:', newMsg);
 
     // 根据消息类型添加特定字段
     if (message.type === 'image') {
@@ -255,7 +328,7 @@ const handleRealTimeMessage = (message: any) => {
     } else {
       // 获取最后一条消息的日期
       const lastMessage = messages.value[messages.value.length - 1];
-      if (lastMessage.createdAt) {
+      if (lastMessage && lastMessage.createdAt) {
         const lastMessageDate = new Date(lastMessage.createdAt);
         const newMessageDate = new Date(newMsg.createdAt);
 
@@ -329,17 +402,28 @@ const loadMessages = async (conversationId: string) => {
       params: { friendId: conversationId }
     })
 
+    console.log('加载消息历史:', response);
+
     // 确保响应数据存在且为数组
     if (response && Array.isArray(response.data)) {
       messages.value = response.data.map((msg: any) => {
-        const baseMessage: any = {
+           const baseMessage: any = {
           messageId: msg.messageId,
           type: msg.type || 'text',
           text: msg.textContent,
           time: msg.serverTimestamp ? new Date(msg.serverTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }): '',
           isSent: msg.fromUserId !== conversationId,
           showDate: msg.showDate || false,
-          createdAt: msg.serverTimestamp ? new Date(msg.serverTimestamp).toISOString() : ''
+          createdAt: msg.serverTimestamp ? new Date(msg.serverTimestamp).toISOString() : '',
+          // 引用消息相关字段
+          quoteMessageId: msg.quoteMessageId || null,
+          quoteMessageContent: msg.quoteMessageContent || null,
+          quoteMessageSenderName: msg.quoteMessageSenderName || null,
+          quoteMessageType: msg.quoteMessageType || null,
+          quoteMessageImageUrl: msg.quoteMessageImageUrl || null,
+          quoteMessageFileUrl: msg.quoteMessageFileUrl || null,
+          quoteMessageFileName: msg.quoteMessageFileName || null,
+          quoteMessageFileSize: msg.quoteMessageFileSize || null
         };
 
         // 根据消息类型添加特定字段
@@ -378,7 +462,7 @@ const loadMessages = async (conversationId: string) => {
 // 发送消息
 const sendMessage = async () => {
   if (!newMessage.value.trim() || !activeConversation.value) {
-    return
+    return;
   }
 
   try {
@@ -389,16 +473,37 @@ const sendMessage = async () => {
     }
 
     // 构造本地消息对象（用于立即显示）
-    const localMessage = {
+    const localMessage: Message = {
       messageId: 'temp_' + Date.now().toString(), // 临时ID
       type: 'text',
       text: newMessage.value,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // 修复时间格式
       isSent: true,
       showDate: false,
       createdAt: new Date().toISOString(),
       clientTimestamp: Date.now() // 添加客户端时间戳
     };
+
+    // 如果有引用消息，添加引用相关信息
+    if (quotedMessage.value) {
+      localMessage.quoteMessageId = quotedMessage.value.messageId;
+      localMessage.quoteMessageContent = quotedMessage.value.text;
+      localMessage.quoteMessageSenderName = quotedMessage.value.isSent ? 
+        getUserInfo()?.userName : activeConversation.value.name;
+      
+      // 根据被引用消息类型设置quoteMessageType
+      if (quotedMessage.value.type === 'image') {
+        localMessage.quoteMessageType = 'image';
+        localMessage.quoteMessageImageUrl = getImageUrl(quotedMessage.value.imageUrls || '');
+      } else if (quotedMessage.value.type === 'file') {
+        localMessage.quoteMessageType = 'file';
+        localMessage.quoteMessageFileName = quotedMessage.value.fileName;
+        localMessage.quoteMessageFileSize = quotedMessage.value.fileSize;
+        localMessage.quoteMessageFileUrl = quotedMessage.value.fileUrl;
+      } else {
+        localMessage.quoteMessageType = 'text';
+      }
+    }
 
     // 立即添加到消息列表（优化用户体验）
     messages.value.push(localMessage);
@@ -406,38 +511,36 @@ const sendMessage = async () => {
     // 滚动到底部
     scrollToBottom();
 
-    // 通过WebSocket发送消息
+    // 通过WebSocket发送消息而不是HTTP请求
     if (globalWebSocketManager.isConnected()) {
-      const messageDTO = {
-        fromUserId: getUserInfo()?.userId,
+      const messageToSend: SendMessage = {
+        type: 'text',
         toTargetId: activeConversation.value.id,
         toTargetType: 'user',
-        type: 'text',
         textContent: newMessage.value,
-        clientTimestamp: Date.now(), // 客户端时间戳
-        status: 'sending'
+        clientTimestamp: Date.now()
       };
 
-      globalWebSocketManager.sendMessage(messageDTO);
+      // 如果有引用消息，添加引用相关信息
+      if (quotedMessage.value) {
+        messageToSend.quoteMessageId = quotedMessage.value.messageId;
+      }
 
-      // Clear input field
-      newMessage.value = ''
+      globalWebSocketManager.sendMessage(messageToSend);
     } else {
-      ElMessage.error('WebSocket未连接，无法发送消息')
+      ElMessage.error('WebSocket未连接，无法发送消息');
       // 如果发送失败，从消息列表中移除本地消息
-      const index = messages.value.findIndex(msg => msg.messageId === localMessage.messageId);
+      const index = messages.value.findIndex((msg: Message) => msg.messageId === localMessage.messageId);
       if (index !== -1) {
         messages.value.splice(index, 1);
       }
     }
+    
+    // 清空输入框和引用消息
+    newMessage.value = '';
+    quotedMessage.value = null;
   } catch (error: any) {
-    // 检查是否是认证错误
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      ElMessage.error('登录已过期，请重新登录')
-      return
-    }
-
-    ElMessage.error('发送消息失败: ' + (error.message || '未知错误'))
+    ElMessage.error('发送消息时出错: ' + (error.message || '未知错误'));
   }
 }
 
@@ -474,12 +577,148 @@ const selectFile = () => {
   fileInput.click();
 };
 
-// 通用文件上传函数
-const uploadFile = async (file: File, fileType: string, loadingText: string) => {
+
+// 发送图片消息时显示加载提示
+const sendImageMessage = async () => {
+  if (!selectedImage.value || !activeConversation.value) {
+    return;
+  }
+
   try {
     // 显示上传提示
     const loadingMessage = ElMessage({
-      message: loadingText,
+      message: '正在上传图片...',
+      type: 'info',
+      duration: 0 // 不自动关闭
+    });
+
+    let imageUrl;
+    
+    // 检查是否启用直传OSS功能
+    if (import.meta.env.VITE_OSS_DIRECT_UPLOAD === 'true') {
+      // 使用直传OSS
+      imageUrl = await uploadFileToOSSDirectly(selectedImage.value, 'message');
+    } else {
+      // 使用原有的后端上传方式（保留作为备选方案）
+      // 创建FormData对象用于上传图片
+      const formData = new FormData();
+      formData.append('file', selectedImage.value);
+      formData.append('fileType', 'message');
+
+      // 上传图片到服务器
+      const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      // 注意：由于apiClient的响应拦截器，response已经是response.data（ResVO对象）
+      // 所以我们可以直接访问code和msg属性
+      if (response && response.code === 200) {
+        imageUrl = response.data;
+      } else {
+        throw new Error(response?.msg || '上传失败');
+      }
+    }
+
+    // 关闭加载提示
+    loadingMessage.close();
+
+    // 构造本地图片消息对象（用于立即显示）
+    const localMessage: Message = {
+      messageId: 'temp_' + Date.now().toString(), // 临时ID
+      type: 'image',
+      text: '[图片]',
+      imageUrls: imageUrl,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSent: true,
+      showDate: false,
+      createdAt: new Date().toISOString(),
+      clientTimestamp: Date.now()
+    };
+
+    // 如果有引用消息，添加引用相关信息
+    if (quotedMessage.value) {
+      localMessage.quoteMessageId = quotedMessage.value.messageId;
+      localMessage.quoteMessageContent = quotedMessage.value.text;
+      localMessage.quoteMessageSenderName = quotedMessage.value.isSent ? 
+        getUserInfo()?.userName : activeConversation.value.name;
+      
+      // 根据被引用消息类型设置quoteMessageType
+      if (quotedMessage.value.type === 'image') {
+        localMessage.quoteMessageType = 'image';
+        localMessage.quoteMessageImageUrl = getImageUrl(quotedMessage.value.imageUrls || '');
+      } else if (quotedMessage.value.type === 'file') {
+        localMessage.quoteMessageType = 'file';
+        localMessage.quoteMessageFileName = quotedMessage.value.fileName;
+        localMessage.quoteMessageFileSize = quotedMessage.value.fileSize;
+        localMessage.quoteMessageFileUrl = quotedMessage.value.fileUrl;
+      } else {
+        localMessage.quoteMessageType = 'text';
+      }
+    }
+
+    // 立即添加到消息列表（优化用户体验）
+    messages.value.push(localMessage);
+
+    // 滚动到底部
+    scrollToBottom();
+
+    // 通过WebSocket发送消息
+    if (globalWebSocketManager.isConnected()) {
+      const messageToSend: SendMessage = {
+        type: 'image',
+        toTargetId: activeConversation.value.id,
+        toTargetType: 'user',
+        imageUrls: imageUrl,
+        clientTimestamp: Date.now()
+      };
+
+      // 如果有引用消息，添加引用相关信息
+      if (quotedMessage.value) {
+        messageToSend.quoteMessageId = quotedMessage.value.messageId;
+      }
+
+      globalWebSocketManager.sendMessage(messageToSend);
+
+      // 清除选中的图片和输入框以及引用消息
+      selectedImage.value = null;
+      newMessage.value = '';
+      quotedMessage.value = null;
+    } else {
+      ElMessage.error('WebSocket未连接，无法发送消息');
+      // 如果发送失败，从消息列表中移除本地消息
+      const index = messages.value.findIndex((msg: Message) => msg.messageId === localMessage.messageId);
+      if (index !== -1) {
+        messages.value.splice(index, 1);
+      }
+    }
+  } catch (error: any) {
+    // 关闭加载提示
+    ElMessage.closeAll();
+    
+    // 检查是否是认证错误
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      ElMessage.error('登录已过期，请重新登录');
+      return;
+    }
+
+    ElMessage.error('发送图片失败: ' + (error.message || '未知错误'));
+    // 清除选中的图片
+    selectedImage.value = null;
+  }
+};
+
+// 发送文件消息
+const sendFileMessage = async (file: File) => {
+  if (!activeConversation.value) {
+    return;
+  }
+
+  try {
+    // 显示上传提示
+    const loadingMessage = ElMessage({
+      message: '正在上传文件...',
       type: 'info',
       duration: 0 // 不自动关闭
     });
@@ -489,13 +728,13 @@ const uploadFile = async (file: File, fileType: string, loadingText: string) => 
     // 检查是否启用直传OSS功能
     if (import.meta.env.VITE_OSS_DIRECT_UPLOAD === 'true') {
       // 使用直传OSS
-      fileUrl = await uploadFileToOSSDirectly(file, fileType);
+      fileUrl = await uploadFileToOSSDirectly(file, 'file');
     } else {
       // 使用原有的后端上传方式（保留作为备选方案）
       // 创建FormData对象用于上传文件
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('fileType', fileType);
+      formData.append('fileType', 'file');
 
       // 上传文件到服务器
       const response = await apiClient.post<string>(API_ENDPOINTS.FILE_UPLOAD, formData, {
@@ -515,94 +754,9 @@ const uploadFile = async (file: File, fileType: string, loadingText: string) => 
 
     // 关闭加载提示
     loadingMessage.close();
-    return fileUrl;
-  } catch (error: any) {
-    // 关闭加载提示
-    ElMessage.closeAll();
-    
-    // 检查是否是认证错误
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      ElMessage.error('登录已过期，请重新登录');
-      throw error;
-    }
-
-    ElMessage.error(`${loadingText}失败: ` + (error.message || '未知错误'));
-    throw error;
-  }
-};
-
-// 发送图片消息时显示加载提示
-const sendImageMessage = async () => {
-  if (!selectedImage.value || !activeConversation.value) {
-    return;
-  }
-
-  try {
-    // 上传图片
-    const imageUrl = await uploadFile(selectedImage.value, 'message', '正在上传图片...');
-
-    // 构造本地图片消息对象（用于立即显示）
-    const localMessage = {
-      messageId: 'temp_' + Date.now().toString(), // 临时ID
-      type: 'image',
-      text: '[图片]',
-      imageUrls: imageUrl,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isSent: true,
-      showDate: false,
-      createdAt: new Date().toISOString(),
-      clientTimestamp: Date.now()
-    };
-
-    // 立即添加到消息列表（优化用户体验）
-    messages.value.push(localMessage);
-
-    // 滚动到底部
-    scrollToBottom();
-
-    // 通过WebSocket发送消息
-    if (globalWebSocketManager.isConnected()) {
-      const messageDTO = {
-        fromUserId: getUserInfo()?.userId,
-        toTargetId: activeConversation.value.id,
-        toTargetType: 'user',
-        type: 'image',
-        imageUrls: imageUrl,
-        clientTimestamp: Date.now(),
-        status: 'sending'
-      };
-
-      globalWebSocketManager.sendMessage(messageDTO);
-
-      // 清除选中的图片和输入框
-      selectedImage.value = null;
-      newMessage.value = '';
-    } else {
-      ElMessage.error('WebSocket未连接，无法发送消息');
-      // 如果发送失败，从消息列表中移除本地消息
-      const index = messages.value.findIndex(msg => msg.messageId === localMessage.messageId);
-      if (index !== -1) {
-        messages.value.splice(index, 1);
-      }
-    }
-  } catch (error: any) {
-    // 清除选中的图片
-    selectedImage.value = null;
-  }
-};
-
-// 发送文件消息
-const sendFileMessage = async (file: File) => {
-  if (!activeConversation.value) {
-    return;
-  }
-
-  try {
-    // 上传文件
-    const fileUrl = await uploadFile(file, 'file', '正在上传文件...');
 
     // 构造本地文件消息对象（用于立即显示）
-    const localMessage = {
+    const localMessage: Message = {
       messageId: 'temp_' + Date.now().toString(), // 临时ID
       type: 'file',
       text: `[文件] ${file.name}`,
@@ -616,6 +770,27 @@ const sendFileMessage = async (file: File) => {
       clientTimestamp: Date.now()
     };
 
+    // 如果有引用消息，添加引用相关信息
+    if (quotedMessage.value) {
+      localMessage.quoteMessageId = quotedMessage.value.messageId;
+      localMessage.quoteMessageContent = quotedMessage.value.text;
+      localMessage.quoteMessageSenderName = quotedMessage.value.isSent ? 
+        getUserInfo()?.userName : activeConversation.value.name;
+      
+      // 根据被引用消息类型设置quoteMessageType
+      if (quotedMessage.value.type === 'image') {
+        localMessage.quoteMessageType = 'image';
+        localMessage.quoteMessageImageUrl = getImageUrl(quotedMessage.value.imageUrls || '');
+      } else if (quotedMessage.value.type === 'file') {
+        localMessage.quoteMessageType = 'file';
+        localMessage.quoteMessageFileName = quotedMessage.value.fileName;
+        localMessage.quoteMessageFileSize = quotedMessage.value.fileSize;
+        localMessage.quoteMessageFileUrl = quotedMessage.value.fileUrl;
+      } else {
+        localMessage.quoteMessageType = 'text';
+      }
+    }
+
     // 立即添加到消息列表（优化用户体验）
     messages.value.push(localMessage);
 
@@ -624,33 +799,46 @@ const sendFileMessage = async (file: File) => {
 
     // 通过WebSocket发送消息
     if (globalWebSocketManager.isConnected()) {
-      const messageDTO = {
-        fromUserId: getUserInfo()?.userId,
+      const messageToSend: SendMessage = {
+        type: 'file',
         toTargetId: activeConversation.value.id,
         toTargetType: 'user',
-        type: 'file',
-        fileUrl: fileUrl,  // 保持与后端DTO字段一致
+        fileUrl: fileUrl,
         fileName: file.name,
         fileSize: file.size || undefined,
         textContent: `[文件] ${file.name}`,
-        clientTimestamp: Date.now(),
-        status: 'sending'
+        clientTimestamp: Date.now()
       };
 
-      globalWebSocketManager.sendMessage(messageDTO);
+      // 如果有引用消息，添加引用相关信息
+      if (quotedMessage.value) {
+        messageToSend.quoteMessageId = quotedMessage.value.messageId;
+      }
 
-      // 清除输入框
+      globalWebSocketManager.sendMessage(messageToSend);
+
+      // 清除输入框和引用消息
       newMessage.value = '';
+      quotedMessage.value = null;
     } else {
       ElMessage.error('WebSocket未连接，无法发送消息');
       // 如果发送失败，从消息列表中移除本地消息
-      const index = messages.value.findIndex(msg => msg.messageId === localMessage.messageId);
+      const index = messages.value.findIndex((msg: Message) => msg.messageId === localMessage.messageId);
       if (index !== -1) {
         messages.value.splice(index, 1);
       }
     }
   } catch (error: any) {
-    // 错误已在uploadFile函数中处理
+    // 关闭加载提示
+    ElMessage.closeAll();
+    
+    // 检查是否是认证错误
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      ElMessage.error('登录已过期，请重新登录');
+      return;
+    }
+
+    ElMessage.error('发送文件失败: ' + (error.message || '未知错误'));
   }
 };
 
@@ -841,7 +1029,6 @@ onMounted(() => {
     refreshUnreadCounts();
   }, 30000); // 每30秒刷新一次
 })
-
 // 组件卸载
 onUnmounted(() => {
   // 移除全局用户状态变更事件监听器
@@ -953,6 +1140,8 @@ const handleGlobalRealTimeMessage = (event: Event) => {
           </div>
         </div>
         
+
+        
         <!-- 背景容器 -->
         <div class="chat-background-container" v-if="activeConversation">
           <!-- 背景图片层 -->
@@ -968,7 +1157,7 @@ const handleGlobalRealTimeMessage = (event: Event) => {
             :style="overlayStyle"
           ></div>
           
-            <div class="chat-messages-container" ref="messagesContainer">
+          <div class="chat-messages-container" ref="messagesContainer">
             <div class="chat-messages">
               <template v-for="message in messages" :key="message.messageId">
                 <div v-if="message.showDate" class="message-date-divider">
@@ -977,26 +1166,72 @@ const handleGlobalRealTimeMessage = (event: Event) => {
                 <div 
                   class="message"
                   :class="{ 'sent': message.isSent, 'received': !message.isSent }"
+                  @touchstart.prevent="setQuotedMessage(message)"
+                  @contextmenu.prevent="setQuotedMessage(message)"
                 >
                   <el-avatar v-if="!message.isSent" :src="getFullAvatarUrl(activeConversation.avatar)" class="message-avatar" />
                   <div class="message-content">
-                     <div class="message-sender-placeholder" v-if="message.isSent"></div>
+                    <div class="message-sender-placeholder" v-if="message.isSent"></div>
                     <div class="message-sender" v-if="!message.isSent">{{ activeConversation.name }}</div>
+                    
                     <!-- 显示文本消息 -->
-                    <div v-if="message.type === 'text'" class="message-text">{{ message.text }}</div>
+                    <div v-if="message.type === 'text'" class="message-text">
+                      <div v-if="message.quoteMessageId" class="quote-message">
+                        <div class="quote-sender">@{{ message.quoteMessageSenderName }}</div>
+                        <div class="quote-content">{{ message.quoteMessageContent }}</div>
+                      </div>
+                      <div>{{ message.text }}</div>
+                    </div>
+
+                    <!-- 显示引用消息 -->
+                    <div v-else-if="message.type === 'quote'" class="message-text">
+                      <div class="quote-message">
+                        <div class="quote-sender">@{{ message.quoteMessageSenderName }}</div>
+                        <!-- 根据被引用消息类型显示不同内容 -->
+                        <div v-if="message.quoteMessageType === 'image'" class="quoted-image-preview">
+                          <img
+                              :src="message.quoteMessageImageUrl"
+                              alt="引用的图片"
+                              class="quoted-image"
+                              @click="previewImage(message.quoteMessageImageUrl)"
+                          />
+                          <div class="quoted-label">[图片]</div>
+                        </div>
+                        <div v-else-if="message.quoteMessageType === 'file'" class="quoted-file-preview">
+                          <div class="file-icon">📁</div>
+                          <div class="file-info">
+                            <div class="file-name">{{ message.quoteMessageFileName }}</div>
+                            <div class="file-size">{{ formatFileSize(message.quoteMessageFileSize) }}</div>
+                          </div>
+                          <div class="quoted-label">[文件]</div>
+                        </div>
+                        <div v-else class="quote-content">{{ message.quoteMessageContent }}</div>
+                      </div>
+                      <div>{{ message.text }}</div>
+                    </div>
                     <!-- 显示图片消息 -->
                     <div v-else-if="message.type === 'image'" class="message-image">
-                      <img :src="getImageUrl(message.imageUrls)" alt="图片消息" @click="previewImage(getImageUrl(message.imageUrls))" />
+                      <div v-if="message.quoteMessageId" class="quote-message">
+                        <div class="quote-sender">@{{ message.quoteMessageSenderName }}</div>
+                        <div class="quote-content">{{ message.quoteMessageContent }}</div>
+                      </div>
+                      <img :src="getImageUrl(message.imageUrls || '')" alt="图片消息" @click="previewImage(getImageUrl(message.imageUrls || ''))" />
                     </div>
+                    
                     <!-- 显示文件消息 -->
                     <div v-else-if="message.type === 'file'" class="message-file">
+                      <div v-if="message.quoteMessageId" class="quote-message">
+                        <div class="quote-sender">@{{ message.quoteMessageSenderName }}</div>
+                        <div class="quote-content">{{ message.quoteMessageContent }}</div>
+                      </div>
                       <div class="file-icon">📁</div>
                       <div class="file-info">
-                        <div class="file-name" @click="downloadFile(message.fileUrl, message.fileName)">{{ message.fileName }}</div>
-                        <div class="file-size">{{ formatFileSize(message.fileSize) }}</div>
+                        <div class="file-name" @click="downloadFile(message.fileUrl || '', message.fileName || '')">{{ message.fileName }}</div>
+                        <div class="file-size">{{ formatFileSize(message.fileSize || 0) }}</div>
                       </div>
-                      <el-button size="small" @click="downloadFile(message.fileUrl, message.fileName)">下载</el-button>
+                      <el-button size="small" @click="downloadFile(message.fileUrl || '', message.fileName || '')">下载</el-button>
                     </div>
+                    
                     <!-- 其他类型消息默认显示文本 -->
                     <div v-else class="message-text">{{ message.text }}</div>
                     <div class="message-time">{{ message.time }}</div>
@@ -1006,66 +1241,92 @@ const handleGlobalRealTimeMessage = (event: Event) => {
               </template>
             </div>
           </div>
-        </div>
-        
-        <div class="chat-input-area" v-if="activeConversation">
-          <div class="input-container-wrapper">
-            <!-- 折叠按钮 -->
-            <button 
-              v-if="activeConversation"
-              @click="toggleAttachmentToolbar"
-              class="icon-button toggle-attachment-button"
-              :class="{ 'expanded': isAttachmentToolbarOpen }"
-              title="附件工具">
-              <span v-if="!isAttachmentToolbarOpen">+</span>
-              <span v-else>−</span>
-            </button>
-            
-            <div class="input-and-toolbar-container">
-              <!-- 附件工具栏（默认隐藏） -->
-              <div v-show="isAttachmentToolbarOpen && activeConversation" class="chat-input-tools">
-                <button 
-                  @click="selectImage"
-                  class="icon-button"
-                  title="发送图片">
-                  📷
-                </button>
-                <button 
-                  @click="selectFile"
-                  class="icon-button"
-                  title="发送文件">
-                  📎
-                </button>
-              </div>
-              
-              <div class="input-container">
-                <el-input
-                  v-model="newMessage"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="输入消息..."
-                  @keyup.enter="sendMessage"
-                  class="message-input"
-                ></el-input>
-                <div class="chat-input-actions">
-                  <el-button 
-                    type="primary" 
-                    @click="sendMessage"
-                    :disabled="!newMessage.trim()"
-                    size="small"
-                  >
-                    发送
-                  </el-button>
+          
+          <div class="chat-input-area" v-if="activeConversation">
+            <div class="input-container-wrapper">
+              <!-- 折叠按钮 -->
+              <button 
+                v-if="activeConversation"
+                @click="toggleAttachmentToolbar"
+                class="icon-button toggle-attachment-button"
+                :class="{ 'expanded': isAttachmentToolbarOpen }"
+                title="附件工具">
+                <span v-if="!isAttachmentToolbarOpen">+</span>
+                <span v-else>−</span>
+              </button>
+          
+              <div class="input-and-toolbar-container">
+                <!-- 附件工具栏（默认隐藏） -->
+                <div v-show="isAttachmentToolbarOpen && activeConversation" class="chat-input-tools">
+                  <button 
+                    @click="selectImage"
+                    class="icon-button"
+                    title="发送图片">
+                    📷
+                  </button>
+                  <button 
+                    @click="selectFile"
+                    class="icon-button"
+                    title="发送文件">
+                    📎
+                  </button>
+                </div>
+                
+                <div class="input-container">
+                  <!-- 引用消息预览 -->
+                  <div v-if="quotedMessage" class="quote-preview">
+                    <div class="quote-preview-content">
+                      <div class="quote-sender">@{{ quotedMessage.isSent ? getUserInfo()?.userName : activeConversation.name }}</div>
+                      <!-- 根据被引用消息类型显示不同内容 -->
+                      <div v-if="quotedMessage.type === 'image'" class="quoted-preview-image">
+                        <img 
+                          :src="getImageUrl(quotedMessage.imageUrls||'')"
+                          alt="引用的图片" 
+                          class="quoted-preview-image-thumb"
+                          @click="previewImage(getImageUrl(quotedMessage.imageUrls||''))"
+                        />
+                        <div class="quoted-preview-label">[图片]</div>
+                      </div>
+                      <div v-else-if="quotedMessage.type === 'file'" class="quoted-preview-file">
+                        <div class="file-icon">📁</div>
+                        <div class="file-info">
+                          <div class="file-name">{{ quotedMessage.fileName }}</div>
+                          <div class="file-size">{{ formatFileSize(quotedMessage.fileSize||0) }}</div>
+                        </div>
+                      </div>
+                      <div v-else class="quote-text">{{ quotedMessage.text }}</div>
+                    </div>
+                    <button @click="cancelQuotedMessage" class="cancel-quote">×</button>
+                  </div>
+                  
+                  <el-input
+                    v-model="newMessage"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="输入消息..."
+                    @keyup.enter="sendMessage"
+                    class="message-input"
+                  ></el-input>
+                  <div class="chat-input-actions">
+                    <el-button 
+                      type="primary" 
+                      @click="sendMessage"
+                      :disabled="!newMessage.trim()"
+                      size="small"
+                    >
+                      发送
+                    </el-button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        
-        <div class="chat-placeholder" v-else>
-          <div class="placeholder-content">
-            <i class="el-icon-chat-dot-round placeholder-icon"></i>
-            <p>选择一个聊天或开始新对话</p>
+          
+          <div class="chat-placeholder" v-else>
+            <div class="placeholder-content">
+              <i class="el-icon-chat-dot-round placeholder-icon"></i>
+              <p>选择一个聊天或开始新对话</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1239,6 +1500,11 @@ const handleGlobalRealTimeMessage = (event: Event) => {
   flex-direction: column;
   min-width: 0;
   position: relative;
+  background-color: #ffffff;
+}
+
+.dark-mode .chat-main {
+  background-color: #1a1a1a;
 }
 
 .chat-header {
@@ -1358,18 +1624,20 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 .message {
   display: flex;
   margin-bottom: 15px;
-  max-width: 80%;
+  max-width: 100%;
   position: relative;
 }
 
 .message.received {
   align-self: flex-start;
+  max-width: 40%;
 }
 
 .message.sent {
   align-self: flex-end;
   flex-direction: row;
   margin-left: auto;
+  max-width: 40%;
 }
 
 .message-avatar {
@@ -1385,6 +1653,12 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 .message.sent .message-avatar {
   order: 2;
   margin-left: 10px;
+}
+
+.message-content {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .message-sender-placeholder {
@@ -1408,10 +1682,11 @@ const handleGlobalRealTimeMessage = (event: Event) => {
   word-wrap: break-word;
   max-width: 100%;
   color: #1a1a1a;
+  white-space: pre-wrap; /* 保持原始空格和换行符格式 */
 }
 
 .message-image {
-  max-width: 200px;
+  max-width: 100%;
   border-radius: 10px;
   overflow: hidden;
   margin: 5px 0;
@@ -1433,6 +1708,7 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 
 .dark-mode .message-text {
   color: #ffffff;
+  white-space: pre-wrap; /* 保持原始空格和换行符格式 */
 }
 
 .message.received .message-text {
@@ -1655,21 +1931,33 @@ const handleGlobalRealTimeMessage = (event: Event) => {
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
-.chat-input-tools {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
 .input-container-wrapper {
   display: flex;
   align-items: flex-end;
+  position: relative;
 }
 
 .input-and-toolbar-container {
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+.chat-input-tools {
+  display: flex;
+  gap: 8px;
+  position: absolute;
+  bottom: 100%;
+  left: -15px;
+  z-index: 10;
+  background-color: #ffffff;
+  padding: 5px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dark-mode .chat-input-tools {
+  background-color: #2d2d2d;
 }
 
 .toggle-attachment-button {
@@ -1726,7 +2014,7 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 
 .input-container {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
   /* 移除input-container的上边距，避免产生细线 */
   margin-top: 0;
@@ -1766,4 +2054,270 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 .chat-input-actions {
   margin-bottom: 5px;
 }
+
+.quoted-image-preview {
+  margin-top: 5px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: 150px;
+  position: relative;
+  display: inline-block;
+}
+
+.dark-mode .quoted-image-preview {
+  border: 1px solid #444;
+}
+
+.quoted-image-preview .quoted-image {
+  max-width: 100%;
+  max-height: 100px;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.quoted-image-preview .quoted-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 12px;
+  text-align: center;
+  padding: 2px;
+}
+
+.quoted-file-preview {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  margin-top: 5px;
+  max-width: 250px;
+}
+
+.dark-mode .quoted-file-preview {
+  background-color: #444;
+}
+
+.quoted-file-preview .file-icon {
+  font-size: 16px;
+  margin-right: 6px;
+}
+
+.quoted-file-preview .file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.quoted-file-preview .file-name {
+  font-size: 12px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark-mode .quoted-file-preview .file-name {
+  color: #fff;
+}
+
+.quoted-file-preview .file-size {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.dark-mode .quoted-file-preview .file-size {
+  color: #ccc;
+}
+
+.quote-message {
+  background-color: #f0f0f0;
+  border-left: 3px solid #0084ff;
+  padding: 5px 10px;
+  margin-bottom: 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.dark-mode .quote-message {
+  background-color: #333;
+  border-left-color: #0077e6;
+}
+
+.quote-message .quote-sender {
+  font-weight: bold;
+  color: #0084ff;
+  margin-bottom: 2px;
+}
+
+.quote-message .quote-content {
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark-mode .quote-content {
+  color: #ccc;
+}
+
+.quote-preview {
+  background-color: #f0f0f0;
+  border-left: 3px solid #0084ff;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  margin-top: 0;
+  border-radius: 4px;
+  font-size: 13px;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dark-mode .quote-preview {
+  background-color: #333;
+  border-left-color: #0077e6;
+}
+
+.quote-preview-content {
+  flex: 1;
+  min-width: 0;
+  max-width: 300px;
+}
+
+.quote-preview .quote-sender {
+  font-weight: bold;
+  color: #0084ff;
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quote-preview .quote-text {
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dark-mode .quote-preview .quote-sender {
+  color: #409eff;
+}
+
+.dark-mode .quote-preview .quote-text {
+  color: #ccc;
+}
+
+.cancel-quote {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.cancel-quote:hover {
+  background-color: #e0e0e0;
+  color: #666;
+}
+
+.dark-mode .cancel-quote {
+  color: #aaa;
+}
+
+.dark-mode .cancel-quote:hover {
+  background-color: #444;
+  color: #fff;
+}
+
+/* 引用预览中的图片样式 */
+.quoted-preview-image {
+  position: relative;
+  display: inline-block;
+  max-width: 100px;
+  margin-top: 5px;
+}
+
+.quoted-preview-image-thumb {
+  max-width: 100%;
+  max-height: 60px;
+  border-radius: 4px;
+  cursor: pointer;
+  object-fit: cover;
+}
+
+.quoted-preview-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 12px;
+  text-align: center;
+  padding: 2px;
+  border-radius: 0 0 4px 4px;
+}
+
+/* 引用预览中的文件样式 */
+.quoted-preview-file {
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
+  background-color: #e0e0e0;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.dark-mode .quoted-preview-file {
+  background-color: #444;
+}
+
+.quoted-preview-file .file-icon {
+  font-size: 16px;
+  margin-right: 5px;
+}
+
+.quoted-preview-file .file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.quoted-preview-file .file-name {
+  font-size: 12px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark-mode .quoted-preview-file .file-name {
+  color: #fff;
+}
+
+.quoted-preview-file .file-size {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.dark-mode .quoted-preview-file .file-size {
+  color: #ccc;
+}
+
 </style>

@@ -59,6 +59,9 @@ public class Message {
 
     @TableField("quote_message_id")
     private String quoteMessageId;
+    
+    @TableField("quote_message_sender_name")
+    private String quoteMessageSenderName;
 
     @TableField("device_type")
     private String deviceType;
@@ -74,4 +77,10 @@ public class Message {
 
     @TableField("rich_content")
     private String richContent;
+    
+    // 添加根据quoteMessageId查询引用消息的方法
+    public Message selectQuotedMessage() {
+        // 这只是一个示例方法，实际实现应该在Mapper中完成
+        return null;
+    }
 }

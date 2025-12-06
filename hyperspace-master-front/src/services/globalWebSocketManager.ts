@@ -5,20 +5,16 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 const log = {
   debug: (...args: any[]) => {
-    if (isDevelopment) {
-      console.log('[DEBUG]', ...args);
-    }
+    // 生产环境不输出调试日志
   },
   info: (...args: any[]) => {
-    if (isDevelopment) {
-      console.log('[INFO]', ...args);
-    }
+    // 生产环境不输出信息日志
   },
   warn: (...args: any[]) => {
-    console.warn('[WARN]', ...args);
+    // 生产环境不输出警告日志
   },
   error: (...args: any[]) => {
-    console.error('[ERROR]', ...args);
+    // 生产环境不输出错误日志
   }
 };
 

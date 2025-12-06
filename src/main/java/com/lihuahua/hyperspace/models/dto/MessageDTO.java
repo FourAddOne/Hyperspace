@@ -22,7 +22,19 @@ public class MessageDTO {
     private Long serverTimestamp;
     private String status;
     private String quoteMessageId;
+    private String quoteMessageSenderName;
     private Date createdAt;
     private String senderName;
     private Boolean showDate = false;
+    
+    // 引用消息的相关字段
+    private String quoteMessageContent;
+    private String quoteMessageSenderId;
+    
+    // 被引用消息的详细信息
+    private String quoteMessageType; // 被引用消息的类型(image/file/text)
+    private String quoteMessageImageUrl; // 被引用图片消息的URL
+    private String quoteMessageFileUrl; // 被引用文件消息的URL
+    private String quoteMessageFileName; // 被引用文件消息的文件名
+    private Long quoteMessageFileSize; // 被引用文件消息的文件大小
 }

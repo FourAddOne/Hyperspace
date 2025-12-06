@@ -24,6 +24,18 @@ spring:
     resources:
       static-locations: classpath:/static/
 
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: root
+    password: 654321
+    virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: auto
+        concurrency: 5
+        max-concurrency: 10
+
 server:
   port: 8080
 

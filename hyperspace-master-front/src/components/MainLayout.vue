@@ -9,20 +9,16 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 const log = {
   debug: (...args: any[]) => {
-    if (isDevelopment) {
-      console.log('[DEBUG]', ...args);
-    }
+    // 生产环境不输出调试日志
   },
   info: (...args: any[]) => {
-    if (isDevelopment) {
-      console.log('[INFO]', ...args);
-    }
+    // 生产环境不输出信息日志
   },
   warn: (...args: any[]) => {
-    console.warn('[WARN]', ...args);
+    // 生产环境不输出警告日志
   },
   error: (...args: any[]) => {
-    console.error('[ERROR]', ...args);
+    // 生产环境不输出错误日志
   }
 };
 
@@ -45,11 +41,9 @@ onMounted(() => {
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
   globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
   globalWebSocketManager.incrementConnection();
-  log.debug('WebSocket连接初始化完成，当前连接数:', globalWebSocketManager.getConnectionCount());
 })
 
 onUnmounted(() => {
-  log.debug('MainLayout卸载，清理WebSocket连接');
   // 移除事件监听器
   window.removeEventListener('userStatusChange', handleUserStatusChange);
   window.removeEventListener('realTimeMessage', handleRealTimeMessage);
@@ -60,7 +54,6 @@ onUnmounted(() => {
 
 // 添加activated钩子确保组件激活时WebSocket回调正确设置
 onActivated(() => {
-  log.debug('MainLayout激活，确保WebSocket连接，当前连接数:', globalWebSocketManager.getConnectionCount());
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
   globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
   globalWebSocketManager.incrementConnection();
@@ -73,7 +66,6 @@ onActivated(() => {
 
 // 添加deactivated钩子确保组件失活时减少连接引用
 onDeactivated(() => {
-  log.debug('MainLayout失活，减少WebSocket连接引用，当前连接数:', globalWebSocketManager.getConnectionCount());
   globalWebSocketManager.decrementConnection();
 })
 </script>

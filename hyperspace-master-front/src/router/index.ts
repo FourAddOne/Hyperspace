@@ -8,6 +8,9 @@ import FriendListView from '../views/FriendListView.vue'
 import AddFriendView from '../views/AddFriendView.vue'
 import GroupListView from "@/views/GroupListView.vue";
 import GamesListView from "@/views/GamesListView.vue";
+import DiscoverView from "@/views/DiscoverView.vue";
+import PublishView from "@/views/PublishView.vue";
+import PostDetailView from "@/views/PostDetailView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -55,6 +58,22 @@ const router = createRouter({
           path: '/games',
           name: 'games',
           component: GamesListView
+        },
+        {
+          path: '/discover',
+          name: 'discover',
+          component: DiscoverView
+        },
+        {
+          path: '/publish',
+          name: 'publish',
+          component: PublishView
+        },
+        {
+          path: '/post/:postId',
+          name: 'post-detail',
+          component: PostDetailView,
+          props: true
         },
         {
           path: '/add-friend',

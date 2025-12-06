@@ -35,7 +35,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // 1. 公开接口
-                        .requestMatchers("/user/login", "/user/register").permitAll()
+                        .requestMatchers("/user/login", "/user/register", "/user/refresh").permitAll()
                         // 2. WebSocket端点
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/groups/**").permitAll()
@@ -43,9 +43,11 @@ public class SecurityConfig {
                         .requestMatchers("/uploads/**").permitAll()
                         // 4. 文件上传接口
                         .requestMatchers("/file/upload").permitAll()
-                        // 5. OSS相关接口
+                        // 5. 帖子相关接口（公开访问）
+                        .requestMatchers("/posts/**").permitAll()
+                        // 6. OSS相关接口
                         .requestMatchers("/oss/**").authenticated()
-                        // 6. Knife4j/Swagger 接口文档放行（补充完整路径）
+                        // 7. Knife4j/Swagger 接口文档放行（补充完整路径）
                         .requestMatchers(
                                 "/doc.html",                    // Knife4j 接口文档首页
                                 "/swagger-ui.html",             // 兼容 Swagger UI 路径
@@ -57,7 +59,7 @@ public class SecurityConfig {
                                 "/swagger-resources/configuration/ui",    // UI配置
                                 "/swagger-resources/configuration/security" // 安全配置
                         ).permitAll()
-                        // 7. 其他接口需要认证
+                        // 8. 其他接口需要认证
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
@@ -72,6 +74,8 @@ public class SecurityConfig {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
+        // 添加额外的CORS配置以解决复杂请求问题
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
