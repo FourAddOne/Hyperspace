@@ -1,0 +1,22 @@
+@startuml
+title 聊天系统 - 离线拉取类
+
+' 引入依赖
+!include core_entities.puml
+!include storage_interaction.puml
+!include message_flow.puml
+
+class MessagePullService {
+    + hotCache: HotDataCacheService  // 依赖缓存
+    + pullUnread(userId: String): List<Message>  // 拉取个人未读消息
+    + pullGroupHistory(groupId: String, userId: String, lastReadTs: Long): List<Message>  // 拉取群历史
+    + syncReadStatus(userId: String, msgIdList: List<String>): Boolean  // 同步已读状态到缓存
+}
+
+' 拉取关系
+MessagePullService "1" -- "*" UserMessageQueue: 拉取（个人未读消息）
+MessagePullService "1" -- "*" GroupMessageQueue: 拉取（群历史消息）
+MessagePullService "1" -- "1" User: 关联（用户拉取）
+MessagePullService "1" -- "1" HotDataCacheService: 依赖（读写缓存）
+
+@enduml

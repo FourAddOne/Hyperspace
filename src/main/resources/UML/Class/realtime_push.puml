@@ -1,0 +1,41 @@
+@startuml
+title 聊天系统 - 实时推送类
+
+' 引入依赖
+!include core_entities.puml
+!include storage_interaction.puml
+!include message_flow.puml
+
+class SSEConnection {
+    + connId: String  // 连接标识
+    + userId: String  // 关联用户
+    + createTs: Long  // 创建时间
+    + lastHeartbeatTs: Long  // 上次心跳
+    + send(msg: String): Boolean  // 发送消息
+    + close(): Boolean  // 关闭连接
+}
+
+class UserOnlineManager {
+    + onlineUserMap: Map<String, SSEConnection>  // 在线用户-连接映射
+    + heartbeatTimeout: Long  // 超时时间（60秒）
+    + hotCache: HotDataCacheService  // 依赖缓存
+    + register(user: User): SSEConnection  // 登录建连接
+    + isOnline(userId: String): Boolean  // 判断在线状态
+    + refreshHeartbeat(connId: String): Boolean  // 刷新心跳
+    + removeOffline(connId: String): Boolean  // 移除离线连接
+    + getConnection(userId: String): SSEConnection  // 获取连接
+}
+
+class SSEPushService {
+    + onlineManager: UserOnlineManager  // 依赖在线管理
+    + pushToUser(userId: String, msg: Message): Boolean  // 推给在线用户
+    + pushToGroup(groupId: String, msg: Message, hotCache: HotDataCacheService): Boolean  // 推给群在线成员
+}
+
+' 推送关系
+UserOnlineManager "1" -- "*" SSEConnection: 管理（维护连接）
+UserOnlineManager "1" -- "*" User: 关联（用户登录/登出）
+SSEPushService "1" -- "1" UserOnlineManager: 依赖（获取在线连接）
+SSEPushService "1" -- "1" Message: 推送（消息内容）
+
+@enduml

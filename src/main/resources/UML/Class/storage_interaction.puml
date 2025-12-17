@@ -1,0 +1,54 @@
+@startuml
+title 聊天系统 - 存储交互类
+
+' 引入依赖
+!include enum_types.puml
+!include core_entities.puml
+
+class OSSClient {
+    + bucketName: String  // OSS桶名称
+    + endpoint: String  // 地域节点
+    + accessKey: String  // 权限密钥
+    + uploadMedia(mediaFile: File, mediaType: MediaType): String  // 返回OSS路径
+    + downloadMedia(ossPath: String): File
+    + deleteMedia(ossPath: String): Boolean
+}
+
+class RedisClient {
+    + redisHost: String  // Redis地址
+    + redisPort: Int  // 端口
+    + set(key: String, value: Object, expireSec: Long): Boolean
+    + get(key: String): Object
+    + incr(key: String): Long  // 自增（未读计数）
+    + decr(key: String): Long  // 自减
+    + delete(key: String): Boolean
+    + hSet(hashKey: String, field: String, value: Object): Boolean
+    + hGet(hashKey: String, field: String): Object
+}
+
+class HotDataCacheService {
+    + redisClient: RedisClient  // 依赖Redis客户端
+    ' 用户热点数据
+    + setUserLastReadTs(userId: String, ts: Long): Boolean
+    + getUserLastReadTs(userId: String): Long
+    + setUserOnlineStatus(userId: String, isOnline: Boolean): Boolean
+    + getUserOnlineStatus(userId: String): Boolean
+    ' 未读消息数
+    + incrUserUnreadCount(userId: String): Long
+    + decrUserUnreadCount(userId: String, count: Int): Long
+    + getUserUnreadCount(userId: String): Long
+    ' 群成员热点数据
+    + setGroupMemberRole(groupId: String, userId: String, role: GroupRole): Boolean
+    + getGroupMemberRole(groupId: String, userId: String): GroupRole
+    + setGroupMemberMute(groupId: String, userId: String, isMuted: Boolean, muteEndTs: Long): Boolean
+    + getGroupMemberMute(groupId: String, userId: String): Map
+    ' 缓存管理
+    + deleteGroupMemberCache(groupId: String, userId: String): Boolean
+    + syncUserUnreadCountToDB(userId: String): Boolean
+}
+
+' 存储间关系
+HotDataCacheService "1" -- "1" RedisClient: 依赖（操作Redis）
+HotDataCacheService "1" -- "1" RedisKeyConstant: 使用（缓存Key）
+
+@enduml
