@@ -7,6 +7,7 @@ import com.lihuahua.hyperspace.models.entity.Post;
 import com.lihuahua.hyperspace.models.entity.PostComment;
 import com.lihuahua.hyperspace.models.entity.PostLike;
 import com.lihuahua.hyperspace.models.entity.CommentLikeMessage;
+import com.lihuahua.hyperspace.models.vo.ResVO;
 import com.lihuahua.hyperspace.server.PostCommentServer;
 import com.lihuahua.hyperspace.server.PostServer;
 import com.lihuahua.hyperspace.service.CommentLikeRabbitMQService;
@@ -61,8 +62,14 @@ public class PostController {
      * @return 创建结果
      */
     @PostMapping("/create")
-    public Map<String, Object> createPost(@RequestBody Post post) {
-        return postServer.createPost(post);
+    public ResVO<?> createPost(@RequestBody Post post) {
+        try{
+            return ResVO.success(postServer.createPost(post));
+        }
+        catch (Exception e){
+            return ResVO.error(201,e.getMessage());
+        }
+
     }
 
     /**
@@ -75,12 +82,12 @@ public class PostController {
      * @return 帖子列表
      */
     @GetMapping
-    public Map<String, Object> getPosts(
+    public ResVO<Map<String, Object>> getPosts(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String type) {
-        return postServer.getPosts(page, size, category, type);
+        return  ResVO.success( postServer.getPosts(page, size, category, type));
     }
 
     /**
@@ -90,10 +97,10 @@ public class PostController {
      * @return 帖子详情
      */
     @GetMapping("/detail/{postId}")
-    public Map<String, Object> getPostDetail(@PathVariable String postId, HttpServletRequest request) {
+    public ResVO<?>  getPostDetail(@PathVariable String postId, HttpServletRequest request) {
         // 从请求中获取当前用户信息
         String userId = (String) request.getAttribute("userId");
-        return postServer.getPostDetail(postId, userId);
+        return  ResVO.success(postServer.getPostDetail(postId, userId));
     }
 
     /**
@@ -103,7 +110,7 @@ public class PostController {
      * @return 评论列表
      */
     @GetMapping("/comments/{postId}")
-    public Map<String, Object> getPostComments(@PathVariable String postId, HttpServletRequest request) {
+    public ResVO<?> getPostComments(@PathVariable String postId, HttpServletRequest request) {
         Map<String, Object> response = new HashMap<>();
         
         try {
@@ -182,7 +189,7 @@ public class PostController {
             response.put("message", "服务器内部错误: " + e.getMessage());
         }
         
-        return response;
+        return  ResVO.success(response);
     }
     
     /**
@@ -192,7 +199,7 @@ public class PostController {
      * @return 上传结果
      */
     @PostMapping("/comment/upload-image")
-    public Map<String, Object> uploadCommentImage(@RequestParam("file") MultipartFile file) {
+    public ResVO<?> uploadCommentImage(@RequestParam("file") MultipartFile file) {
         Map<String, Object> response = new HashMap<>();
         
         try {
@@ -207,7 +214,7 @@ public class PostController {
             response.put("message", "上传失败: " + e.getMessage());
         }
         
-        return response;
+        return  ResVO.success(response);
     }
     
     /**
@@ -219,7 +226,7 @@ public class PostController {
      */
     @PostMapping("/comment/create/{postId}")
     @Transactional
-    public Map<String, Object> createComment(
+    public ResVO<?> createComment(
             @PathVariable String postId, 
             @RequestBody PostComment comment) throws JsonProcessingException {
     
@@ -317,7 +324,7 @@ public class PostController {
         throw e; // 传播异常以触发事务回滚
     }
     
-    return response;
+    return  ResVO.success(response);
 }
     
     /**
@@ -328,7 +335,7 @@ public class PostController {
      * @return 点赞结果
      */
     @PostMapping("/comment/like/{commentId}")
-    public Map<String, Object> likeComment(
+    public ResVO<?> likeComment(
             @PathVariable String commentId,
             @RequestBody Map<String, String> like) {
     
@@ -349,7 +356,7 @@ public class PostController {
             response.put("message", "服务器内部错误: " + e.getMessage());
         }
         
-        return response;
+        return  ResVO.success(response);
     }
     
     /**
@@ -361,7 +368,7 @@ public class PostController {
      */
     @PostMapping("/comment/reply/{commentId}")
     @Transactional
-    public Map<String, Object> replyComment(
+    public ResVO<?> replyComment(
             @PathVariable String commentId,
             @RequestBody PostComment comment) throws JsonProcessingException {
 
@@ -474,7 +481,7 @@ public class PostController {
         throw e; // 传播异常以触发事务回滚
     }
 
-    return response;
+    return  ResVO.success(response);
 }
     
     /**
@@ -485,7 +492,7 @@ public class PostController {
      * @return 点赞结果
      */
     @PostMapping("/like/{postId}")
-    public Map<String, Object> likePost(
+    public ResVO<?> likePost(
             @PathVariable String postId,
             @RequestBody PostLike like) {
         
@@ -503,7 +510,7 @@ public class PostController {
             response.put("message", e.getMessage());
         }
         
-        return response;
+        return  ResVO.success(response);
     }
     
     /**

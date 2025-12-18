@@ -19,7 +19,7 @@
 
     <!-- 退出群组 -->
     <delete id="quitGroup">
-        DELETE FROM group_user
+        DELETE FROM group_member
         WHERE group_id = #{groupId} AND user_id = #{userId}
     </delete>
 
@@ -35,12 +35,12 @@
     <select id="groupUserList" resultType="com.lihuahua.hyperspace.models.entity.User">
         SELECT u.*
         FROM user u
-        JOIN group_user gu ON u.id = gu.user_id
+        JOIN group_member gu ON u.id = gu.user_id
         WHERE gu.group_id = #{groupId}
     </select>
     <select id="groupListbyUserId" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
-        SELECT g.group_name,g.group_id
-        FROM `group_member`
+        SELECT g.group_id,g.user_id
+        FROM `group_member` g
         where user_id=#{userId}
 
     </select>

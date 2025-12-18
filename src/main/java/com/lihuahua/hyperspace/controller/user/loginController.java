@@ -58,7 +58,6 @@ public class loginController {
             }
             return ResVO.success(resData);
         } catch (Exception e) {
-            e.printStackTrace(); // 添加错误日志
             return ResVO.fail(e.getMessage());
         }
     }

@@ -79,6 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter implements Cha
                 } catch (Exception e) {
                     // Token无效
                     logger.error("无法解析Token: " + e.getMessage());
+                    logger.error("无效的JWT格式: " + jwt);
                 }
             } else {
                 logger.error("无效的JWT格式: " + jwt);

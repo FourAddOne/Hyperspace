@@ -29,41 +29,61 @@ public class GroupController {
     @Operation(summary = "创建群组")
     @PostMapping("/create")
     public ResVO createGroup(@RequestBody GroupDTO groupDTO){
+        try{
         groupServer.createGroup(groupDTO);
-        return ResVO.success();
-    };
+        return ResVO.success("创建群组成功");
+        }catch (Exception e){
+            return ResVO.error(201,e.getMessage());
+        }
+    }
 
 
     @Operation(summary = "加入群组")
     @PostMapping("/join")
     public ResVO joinGroup(@RequestBody GroupDTO groupDTO) {
+        try{
         groupServer.joinGroup(groupDTO);
-        return ResVO.success();
-    };
+        return ResVO.success("加入群组成功");
+    }catch (Exception e){
+        return ResVO.error(201,e.getMessage());
+    }
+    }
 
     @Operation(summary = "退出群组")
     @PostMapping("/quit")
     public ResVO quitGroup(@RequestBody GroupDTO groupDTO) {
+        try{
         groupServer.quitGroup(groupDTO);
-        return ResVO.success();
-    };
+        return ResVO.success("退出群组成功");
+        }catch (Exception e){
+            return ResVO.error(201,e.getMessage());
+        }
+    }
 
 
 
     @Operation(summary = "群组消息")
     @PostMapping("/message")
     public ResVO groupMessage(@RequestBody GroupDTO groupDTO) {
+        try{
         groupServer.groupMessage(groupDTO);
         return ResVO.success();
+    }catch (Exception e){
+        return ResVO.error(201,e.getMessage());
+    }
     }
 
 
     @Operation(summary = "群组列表")
     @PostMapping("/list")
     public ResVO groupList(@RequestBody GroupDTO groupDTO) {
+        try{
         groupServer.groupList(groupDTO);
         return ResVO.success();
+    }catch (Exception e){
+        return ResVO.error(201,e.getMessage());
+        }
     }
 
 
-};
+}
