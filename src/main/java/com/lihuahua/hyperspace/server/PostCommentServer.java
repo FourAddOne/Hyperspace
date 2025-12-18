@@ -55,4 +55,14 @@ public interface PostCommentServer extends IService<PostComment> {
     void warmupUserCommentLikeData(String commentId, String userId);
 
     String warmupUserPostLikeData(String postId, String userId);
+
+    /**
+     * 点赞评论（使用RabbitMQ异步处理）
+     *
+     * @param commentId 评论ID
+     * @param userId 用户ID
+     * @param username 用户名
+     * @return 点赞结果
+     */
+    boolean likeComment(String commentId, String userId, String username);
 }

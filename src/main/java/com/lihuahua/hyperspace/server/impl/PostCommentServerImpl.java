@@ -446,4 +446,10 @@ public class PostCommentServerImpl extends ServiceImpl<PostCommentMapper, PostCo
             return null;
         }
     }
+
+    @Override
+    public boolean likeComment(String commentId, String userId, String username) {
+        // 使用基于RabbitMQ的异步方式处理点赞逻辑
+        return toggleLikeWithRabbitMQ(commentId, userId, username);
+    }
 }

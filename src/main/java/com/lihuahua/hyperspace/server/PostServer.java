@@ -2,7 +2,10 @@ package com.lihuahua.hyperspace.server;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.lihuahua.hyperspace.models.entity.Post;
+import com.lihuahua.hyperspace.models.entity.PostComment;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 public interface PostServer extends IService<Post> {
@@ -49,4 +52,44 @@ public interface PostServer extends IService<Post> {
      * @return 操作结果
      */
     boolean toggleLikeWithRabbitMQ(String postId, String userId, String username);
+
+    /**
+     * 获取帖子评论列表
+     *
+     * @param postId 帖子ID
+     * @param userId 用户ID
+     * @return 评论列表
+     */
+    List<PostComment> getPostComments(String postId, String userId);
+
+    /**
+     * 上传评论图片
+     *
+     * @param file 图片文件
+     * @return 上传结果
+     */
+    String uploadCommentImage(MultipartFile file);
+
+    /**
+     * 创建评论
+     *
+     * @param postId 帖子ID
+     * @param comment 评论内容
+     * @return 评论结果
+     */
+    PostComment createComment(String postId, PostComment comment);
+
+    /**
+     * 回复评论
+     *
+     * @param commentId 被回复的评论ID
+     * @param comment 回复内容
+     * @return 回复结果
+     */
+    PostComment replyComment(String commentId, PostComment comment);
+
+    /**
+     * 清除帖子列表缓存
+     */
+    void clearPostListCache();
 }
