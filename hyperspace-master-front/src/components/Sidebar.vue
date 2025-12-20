@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {ChatRound, User,Setting, SwitchButton, ChatLineSquare,SwitchFilled, Compass} from '@element-plus/icons-vue'
-import { getUserInfo } from '../utils/user'
-import { removeTokens } from '../utils/auth'
+import {ChatRound, User, Setting, SwitchButton, ChatLineSquare,SwitchFilled} from '@element-plus/icons-vue'
+import { getUserInfo, getFullAvatarUrl } from '../utils/user'
+import { removeToken } from '../utils/auth'
 import apiClient, { API_ENDPOINTS } from '../services/api'
 import { useUserStore } from '../stores/userStore'
 
@@ -167,6 +167,14 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
         </li>
 
         <li
+            :class="{ active: $route.name === 'ai-chat' }"
+            @click="$router.push('/ai-chat')"
+        >
+          <ChatRound class="nav-icon" />
+          <span>AI聊天</span>
+        </li>
+
+        <li
             :class="{ active: $route.name === 'games' }"
             @click="$router.push('/games')"
         >
@@ -293,37 +301,33 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 15px 0;
+  padding: 12px 0;
   cursor: pointer;
   color: #666;
-  transition: all 0.3s ease;
-  position: relative;
+  transition: background-color 0.2s;
 }
 
 .nav-menu li:hover {
-  background-color: #f0f0f0;
-  color: #333;
+  background-color: #f1f1f1;
 }
 
 .nav-menu li.active {
-  background-color: #e0f0ff;
+  background-color: #e0e0e0;
   color: #0084ff;
 }
 
-.nav-menu li.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 4px;
-  background-color: #0084ff;
+.nav-menu li.active .nav-icon {
+  color: #0084ff;
 }
 
 .nav-icon {
-  width: 24px;
-  height: 24px;
   margin-bottom: 4px;
+  width: 30px;  /* 设置图标宽度 */
+  height: 30px; /* 设置图标高度 */
+}
+
+.nav-menu li span {
+  font-size: 16px; /* 从12px缩小到10px */
 }
 
 .sidebar-footer {
@@ -369,6 +373,56 @@ const statusClass = computed(() => userStore.getUserInfo?.loginStatus ? 'status-
 }
 
 .dark-mode .sidebar-footer {
+  font-size: 12px;
+  width: 100%;
+}
+
+.logout-btn:hover {
+  background-color: #f1f1f1;
+}
+
+.logout-btn .nav-icon {
+  margin-bottom: 4px;
+  width: 30px;  /* 设置图标宽度 */
+  height: 30px; /* 设置图标高度 */
+}
+</style>
+
+<!-- 使用非scoped样式来处理暗色模式 -->
+<style>
+/* 暗色模式样式 */
+.dark-mode .sidebar {
+  background-color: #1a1a1a;
+  border-right: 1px solid #444;
+  color: #f5f5f5;
+}
+
+.dark-mode .sidebar .user-profile-header {
+  border-bottom: 1px solid #444;
+}
+
+.dark-mode .sidebar .username {
+  color: #f5f5f5;
+}
+
+.dark-mode .sidebar .nav-menu li {
+  color: #ccc;
+}
+
+.dark-mode .sidebar .nav-menu li:hover {
+  background-color: #3d3d3d;
+}
+
+.dark-mode .sidebar .nav-menu li.active {
+  background-color: #3d3d3d;
+  color: #409eff;
+}
+
+.dark-mode .sidebar .nav-menu li.active .nav-icon {
+  color: #409eff;
+}
+
+.dark-mode .sidebar .sidebar-footer {
   border-top: 1px solid #444;
 }
 

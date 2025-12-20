@@ -42,9 +42,11 @@ onMounted(() => {
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
   globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
   globalWebSocketManager.incrementConnection();
+  console.log('WebSocket连接初始化完成，当前连接数:', globalWebSocketManager.getConnectionCount());
 })
 
 onUnmounted(() => {
+  console.log('MainLayout卸载，清理WebSocket连接');
   // 移除事件监听器
   window.removeEventListener('userStatusChange', handleUserStatusChange);
   window.removeEventListener('realTimeMessage', handleRealTimeMessage);
@@ -55,6 +57,7 @@ onUnmounted(() => {
 
 // 添加activated钩子确保组件激活时WebSocket回调正确设置
 onActivated(() => {
+  console.log('MainLayout激活，确保WebSocket连接，当前连接数:', globalWebSocketManager.getConnectionCount());
   globalWebSocketManager.setUserStatusCallback(handleUserStatusChange);
   globalWebSocketManager.setMessageCallback(handleRealTimeMessage);
   globalWebSocketManager.incrementConnection();

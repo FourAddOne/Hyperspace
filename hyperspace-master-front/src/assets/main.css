@@ -133,8 +133,15 @@ html, body {
 
 /* 登录页面背景 */
 body.login-page {
-  background: linear-gradient(to bottom, #409EFF, #1a3a4a);
-  height: 100vh;
+  background: url('@/assets/images/b1.png') no-repeat center center fixed;
+  background-size: cover;
+}
+
+#app {
+  min-height: 100vh;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   margin: 0;
   padding: 0;
 }
