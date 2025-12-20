@@ -209,7 +209,11 @@ const sendMessage = async () => {
 const scrollToBottom = () => {
   nextTick(() => {
     if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      // 使用smooth滚动获得更好的用户体验
+      messagesContainer.value.scrollTo({
+        top: messagesContainer.value.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   })
 }
@@ -305,29 +309,41 @@ onUnmounted(() => {
             :key="message.id"
             :class="['message-item', message.isSent ? 'sent' : 'received']"
           >
-            <!-- 头像（只在接收消息时显示） -->
-            <img 
-              v-if="!message.isSent"
-              :src="activeConversation?.avatar || '/src/assets/logo.svg'" 
-              alt="头像" 
-              class="message-avatar"
-            />
-            
-            <!-- 消息内容 -->
-            <div class="message-content">
-              <div :class="['message-text', message.isSent ? 'sent' : 'received']">
-                {{ message.text }}
+            <!-- 接收消息 (AI消息) -->
+            <div v-if="!message.isSent" class="message-wrapper received">
+              <!-- AI头像 -->
+              <img 
+                :src="activeConversation?.avatar || '/src/assets/logo.svg'" 
+                alt="AI助手头像" 
+                class="message-avatar"
+              />
+              
+              <!-- 消息内容 -->
+              <div class="message-content received">
+                <div class="message-text received">
+                  {{ message.text }}
+                </div>
+                <div class="message-time">{{ message.time }}</div>
               </div>
-              <div class="message-time">{{ message.time }}</div>
             </div>
             
-            <!-- 头像（只在发送消息时显示） -->
-            <img 
-              v-if="message.isSent"
-              :src="getFullAvatarUrl(getUserInfo()?.avatarUrl) || '/src/assets/logo.svg'" 
-              alt="头像" 
-              class="message-avatar"
-            />
+            <!-- 发送消息 (用户消息) -->
+            <div v-else class="message-wrapper sent">
+              <!-- 用户头像 -->
+              <img 
+                :src="getFullAvatarUrl(getUserInfo()?.avatarUrl) || '/src/assets/logo.svg'" 
+                alt="用户头像" 
+                class="message-avatar"
+              />
+              
+              <!-- 消息内容 -->
+              <div class="message-content sent">
+                <div class="message-text sent">
+                  {{ message.text }}
+                </div>
+                <div class="message-time">{{ message.time }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -427,20 +443,36 @@ onUnmounted(() => {
   gap: 15px;
 }
 
+/* 确保消息从顶部开始排列 */
 .date-divider {
   text-align: center;
   color: #999;
   font-size: 12px;
   margin: 10px 0;
+  flex-shrink: 0;
 }
 
 .message-item {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  margin-bottom: 15px;
+  flex-shrink: 0;
 }
 
-.message-item.sent {
+.message-wrapper {
+  display: flex;
+  gap: 10px;
+  max-width: 50%;
+}
+
+.message-wrapper.received {
+  margin-right: auto;
+}
+
+.message-wrapper.sent {
+  margin-left: auto;
+}
+
+.message-wrapper.sent {
   flex-direction: row-reverse;
 }
 
@@ -448,18 +480,32 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+  object-position: center center;
+  align-self: flex-start; /* 让头像对齐到顶部 */
 }
 
 .message-content {
-  max-width: 70%;
   display: flex;
   flex-direction: column;
+}
+
+.message-content.received {
+  align-items: flex-start;
+}
+
+.message-content.sent {
+  align-items: flex-end;
 }
 
 .message-text {
   padding: 10px 15px;
   border-radius: 18px;
   word-wrap: break-word;
+  max-width: 100%;
+  white-space: pre-wrap;
+  position: relative;
 }
 
 .message-text.sent {
@@ -468,16 +514,49 @@ onUnmounted(() => {
   border-bottom-right-radius: 4px;
 }
 
+/* 发送消息气泡尖角 */
+.message-text.sent::before {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 12px;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+  border-left-color: #0084ff;
+  border-right: 0;
+}
+
 .message-text.received {
   background-color: #f5f5f5;
   color: #333;
   border-bottom-left-radius: 4px;
 }
 
+/* 接收消息气泡尖角 */
+.message-text.received::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 12px;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+  border-right-color: #f5f5f5;
+  border-left: 0;
+}
+
 .message-time {
   font-size: 11px;
   color: #999;
   margin-top: 4px;
+}
+
+.message-wrapper.received .message-time {
+  align-self: flex-start;
+}
+
+.message-wrapper.sent .message-time {
   align-self: flex-end;
 }
 
@@ -584,6 +663,11 @@ onUnmounted(() => {
 .dark-mode .message-text.received {
   background-color: #3d3d3d;
   color: #f5f5f5;
+}
+
+/* 暗色模式下接收消息气泡尖角 */
+.dark-mode .message-text.received::before {
+  border-right-color: #3d3d3d;
 }
 
 .dark-mode .message-input-container {
