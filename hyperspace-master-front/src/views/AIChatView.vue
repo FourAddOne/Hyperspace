@@ -275,7 +275,7 @@ onUnmounted(() => {
       <div class="chat-header">
         <div class="chat-header-info">
           <img 
-            :src="activeConversation?.avatar || '/src/assets/logo.svg'" 
+            :src="activeConversation?.avatar || '/src/assets/logo.svg'"
             alt="头像" 
             class="chat-avatar"
           />
@@ -461,7 +461,8 @@ onUnmounted(() => {
 .message-wrapper {
   display: flex;
   gap: 10px;
-  max-width: 50%;
+  max-width: 90%;
+  width: 100%;
 }
 
 .message-wrapper.received {
@@ -483,7 +484,6 @@ onUnmounted(() => {
   flex-shrink: 0;
   object-fit: cover;
   object-position: center center;
-  align-self: flex-start; /* 让头像对齐到顶部 */
 }
 
 .message-content {
@@ -491,19 +491,10 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.message-content.received {
-  align-items: flex-start;
-}
-
-.message-content.sent {
-  align-items: flex-end;
-}
-
 .message-text {
   padding: 10px 15px;
   border-radius: 18px;
   word-wrap: break-word;
-  max-width: 100%;
   white-space: pre-wrap;
   position: relative;
 }
