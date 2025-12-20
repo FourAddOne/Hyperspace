@@ -9,16 +9,16 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 const log = {
   debug: (...args: any[]) => {
-    // 生产环境不输出调试日志
+    console.debug('[MainLayout][DEBUG]', ...args);
   },
   info: (...args: any[]) => {
-    // 生产环境不输出信息日志
+    console.info('[MainLayout][INFO]', ...args);
   },
   warn: (...args: any[]) => {
-    // 生产环境不输出警告日志
+    console.warn('[MainLayout][WARN]', ...args);
   },
   error: (...args: any[]) => {
-    // 生产环境不输出错误日志
+    console.error('[MainLayout][ERROR]', ...args);
   }
 };
 
@@ -32,6 +32,7 @@ const handleUserStatusChange = (data: any) => {
 // 处理实时消息
 const handleRealTimeMessage = (data: any) => {
   log.debug('收到实时消息 (来自MainLayout):', data);
+  console.log('[MainLayout] 收到实时消息 (来自MainLayout):', data);
   // 通过全局事件将消息传播到其他组件
   window.dispatchEvent(new CustomEvent('realTimeMessage', { detail: data }));
 };

@@ -3,6 +3,7 @@ package com.lihuahua.hyperspace.mapper;
 
 import com.lihuahua.hyperspace.models.dto.GroupDTO;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -16,8 +17,15 @@ public interface GroupMapper {
  * @param groupId 群组ID
  * @param userId 创建者用户ID
  * @param members 群组成员列表
+ * @param avatarUrl 群组头像URL
+ * @param description 群组描述
  */
-    void createGroup(String groupName,String groupId,String userId,String members);
+    void createGroup(@Param("groupName") String groupName, 
+                     @Param("groupId") String groupId, 
+                     @Param("userId") String userId, 
+                     @Param("members") String members,
+                     @Param("avatarUrl") String avatarUrl,
+                     @Param("description") String description);
 
 /**
  * 加入群组的方法
@@ -55,4 +63,34 @@ public interface GroupMapper {
     void groupUserList(String groupId);
 
     List<GroupDTO> groupListbyUserId(String userId);
+    
+    // 根据群组ID查找群组
+    GroupDTO getGroupById(String groupId);
+    
+    // 获取所有群组（用于搜索）
+    List<GroupDTO> getAllGroups();
+    
+    // 获取所有群组详情（用于搜索）
+    List<GroupDTO> getAllGroupsWithDetails();
+    
+    // 检查用户是否已在群组中
+    boolean isUserInGroup(@Param("groupId") String groupId, @Param("userId") String userId);
+    
+    // 更新群组成员列表
+    void updateGroupMembers(@Param("groupId") String groupId, @Param("members") String members);
+    
+    // 更新群组成员数量
+    void updateGroupMemberCount(@Param("groupId") String groupId, @Param("memberCount") int memberCount);
+    
+    // 获取群组消息列表
+    List<GroupDTO> getGroupMessages(@Param("groupId") String groupId);
+    
+    // 删除群组中的所有成员
+    void removeAllMembers(@Param("groupId") String groupId);
+    
+    // 删除群组
+    void deleteGroup(@Param("groupId") String groupId);
+    
+    // 获取群组成员详情
+    List<GroupDTO> getGroupMembersWithDetails(@Param("groupId") String groupId);
 }

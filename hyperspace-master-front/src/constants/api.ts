@@ -52,9 +52,14 @@ export const API_ENDPOINTS = {
   CREATEGROUP: '/groups/create',
   JOINGROUP: '/groups/join',
   QUITGROUP: '/groups/quit',
+  KICK_MEMBER: '/groups/kick',
+  DISBAND_GROUP: '/groups/disband',
   GROUPLIST: '/groups/list',
   GROUPMEMBERS: '/groups/members',
-  GROUPMESSAGE: '/groups/message',
+  GROUPMESSAGE: '/groups/message', // 发送群组消息
+  GROUPMESSAGES: '/groups/messages', // 获取群组消息列表
+  GROUPSEARCH: '/groups/search',
+  GROUPINFO: '/groups/info',
   
   // 帖子相关
   POST_LIST: '/posts',

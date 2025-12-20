@@ -7,14 +7,14 @@
 
     <!-- 创建群组 -->
     <insert id="createGroup">
-        INSERT INTO `group` (group_name, group_id, creator_id, created_at, updated_at,members)
-        VALUES (#{groupName}, #{groupId}, #{userId}, NOW(), NOW(),#{members})
+        INSERT INTO `group` (group_name, group_id, creator_id, members, member_count, avatar_url, description, created_at, updated_at, status)
+        VALUES (#{groupName}, #{groupId}, #{userId}, #{members}, 1, #{avatarUrl}, #{description}, NOW(), NOW(), 'NORMAL')
     </insert>
 
     <!-- 加入群组 -->
     <insert id="joinGroup">
-        INSERT INTO group_member (group_id, user_id, joined_at,role)
-        VALUES (#{groupId}, #{userId}, NOW(),#{role})
+        INSERT INTO group_member (group_id, user_id, role, joined_at, updated_at, status)
+        VALUES (#{groupId}, #{userId}, #{role}, NOW(), NOW(), 'NORMAL')
     </insert>
 
     <!-- 退出群组 -->
@@ -25,24 +25,119 @@
 
     <!-- 群组消息 -->
     <insert id="groupMessage">
-        INSERT INTO group_message (group_id, user_id, message, create_time)
-        VALUES (#{groupId}, #{userId}, #{message}, NOW())
+        INSERT INTO message (message_id, type, from_user_id, to_target_id, to_target_type, text_content, client_timestamp, server_timestamp, status, create_time, update_time)
+        VALUES (CONCAT('msg_', REPLACE(UUID(), '-', '')), 'text', #{userId}, #{groupId}, 'group', #{message}, UNIX_TIMESTAMP(NOW())*1000, UNIX_TIMESTAMP(NOW())*1000, 'success', NOW(), NOW())
     </insert>
 
+    <!-- 删除群组中的所有成员 -->
+    <delete id="removeAllMembers">
+        DELETE FROM group_member
+        WHERE group_id = #{groupId}
+    </delete>
 
+    <!-- 删除群组 -->
+    <delete id="deleteGroup">
+        DELETE FROM `group`
+        WHERE group_id = #{groupId}
+    </delete>
 
     <!-- 群组用户列表 -->
     <select id="groupUserList" resultType="com.lihuahua.hyperspace.models.entity.User">
         SELECT u.*
         FROM user u
-        JOIN group_member gu ON u.id = gu.user_id
-        WHERE gu.group_id = #{groupId}
+        JOIN group_member gu ON u.user_id = gu.user_id
+        WHERE gu.group_id = #{groupId} AND gu.status = 'NORMAL'
     </select>
     <select id="groupListbyUserId" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
-        SELECT g.group_id,g.user_id
-        FROM `group_member` g
-        where user_id=#{userId}
-
+        SELECT g.group_id, g.group_name as groupName, g.creator_id as creatorId, g.member_count as memberCount, g.avatar_url as avatarUrl, g.description
+        FROM `group` g
+        JOIN group_member gm ON g.group_id = gm.group_id
+        WHERE gm.user_id = #{userId} AND gm.status = 'NORMAL' AND g.status = 'NORMAL'
+    </select>
+    
+    <!-- 根据群组ID查找群组 -->
+    <select id="getGroupById" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
+        SELECT group_id as groupId, group_name as groupName, creator_id as creatorId, members, member_count as memberCount, avatar_url as avatarUrl, description
+        FROM `group`
+        WHERE group_id = #{groupId}
+    </select>
+    
+    <!-- 获取所有群组（用于搜索） -->
+    <select id="getAllGroups" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
+        SELECT group_id as groupId, group_name as groupName
+        FROM `group`
+    </select>
+    
+    <!-- 获取所有群组详情（用于搜索） -->
+    <select id="getAllGroupsWithDetails" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
+        SELECT group_id as groupId, group_name as groupName, member_count as memberCount, avatar_url as avatarUrl, description
+        FROM `group`
+    </select>
+    
+    <!-- 检查用户是否已在群组中 -->
+    <select id="isUserInGroup" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM group_member
+        WHERE group_id = #{groupId} AND user_id = #{userId}
+    </select>
+    
+    <!-- 更新群组成员列表 -->
+    <update id="updateGroupMembers">
+        UPDATE `group`
+        SET members = #{members}
+        WHERE group_id = #{groupId}
+    </update>
+    
+    <!-- 更新群组成员数量 -->
+    <update id="updateGroupMemberCount">
+        UPDATE `group`
+        SET member_count = #{memberCount}
+        WHERE group_id = #{groupId}
+    </update>
+    
+    <!-- 获取群组消息列表 -->
+    <select id="getGroupMessages" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
+        SELECT 
+            m.message_id as messageId,
+            m.type,
+            m.from_user_id as fromUserId,
+            m.to_target_id as groupId,
+            m.text_content as textContent,
+            m.image_urls as imageUrls,
+            m.file_urls as fileUrls,
+            m.file_name as fileName,
+            m.file_size as fileSize,
+            m.client_timestamp as clientTimestamp,
+            m.server_timestamp as serverTimestamp,
+            m.status,
+            m.quote_message_id as quoteMessageId,
+            m.quote_message_sender_name as quoteMessageSenderName,
+            m.create_time as createTime,
+            m.update_time as updateTime,
+            u.user_name as userName,
+            u.avatar_url as userAvatarUrl
+        FROM message m
+        LEFT JOIN user u ON m.from_user_id = u.user_id
+        WHERE m.to_target_id = #{groupId} AND m.to_target_type = 'group'
+        ORDER BY m.server_timestamp ASC
+    </select>
+    
+    <!-- 获取群组成员详情 -->
+    <select id="getGroupMembersWithDetails" resultType="com.lihuahua.hyperspace.models.dto.GroupDTO">
+        SELECT 
+            u.user_id as userId,
+            u.user_name as userName,
+            u.avatar_url as avatarUrl,
+            gm.role as role
+        FROM user u
+        JOIN group_member gm ON u.user_id = gm.user_id
+        WHERE gm.group_id = #{groupId} AND gm.status = 'NORMAL'
+        ORDER BY 
+            CASE gm.role 
+                WHEN 'OWNER' THEN 1 
+                WHEN 'ADMIN' THEN 2 
+                ELSE 3 
+            END
     </select>
 
 </mapper>

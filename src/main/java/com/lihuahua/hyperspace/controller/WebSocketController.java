@@ -5,6 +5,7 @@ import com.lihuahua.hyperspace.models.entity.Message;
 import com.lihuahua.hyperspace.models.vo.UserProfileVO;
 import com.lihuahua.hyperspace.server.MessageServer;
 import com.lihuahua.hyperspace.server.UserServer;
+import com.lihuahua.hyperspace.service.ChatMessageProducer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -32,6 +33,9 @@ public class WebSocketController {
     
     @Autowired
     private MessageServer messageServer;
+    
+    @Autowired
+    private ChatMessageProducer chatMessageProducer;
     
     // 用于跟踪用户连接状态
     private static final ConcurrentHashMap<String, Boolean> userConnectionStatus = new ConcurrentHashMap<>();
@@ -112,6 +116,8 @@ public class WebSocketController {
     @MessageMapping("/chat")
     public void handleChatMessage(@Payload MessageDTO messageDTO, Principal principal) {
         try {
+            System.out.println("[WebSocket] 接收到聊天消息: " + messageDTO);
+            
             // 检查principal是否为null
             if (principal == null) {
                 System.err.println("无法处理聊天消息: 未找到认证用户");
@@ -122,30 +128,37 @@ public class WebSocketController {
             messageDTO.setFromUserId(senderId);
             messageDTO.setCreatedAt(new Date());
             
+            System.out.println("[WebSocket] 消息发送者ID: " + senderId);
+            System.out.println("[WebSocket] 消息接收者ID: " + messageDTO.getToTargetId());
+            
             // 保存消息到数据库
             boolean saved = messageServer.sendMessage(messageDTO);
             
             if (saved) {
-                System.out.println("消息已保存到数据库");
+                System.out.println("[WebSocket] 消息已保存到数据库");
                 
                 // 发送消息给发送者（用于同步）
+                System.out.println("[WebSocket] 发送消息给发送者: " + messageDTO.getFromUserId());
                 messagingTemplate.convertAndSendToUser(
                     messageDTO.getFromUserId(),
-                    "/queue/messages",
+                    "/user/queue/messages",
                     messageDTO
                 );
                 
                 // 发送消息给接收者
+                System.out.println("[WebSocket] 发送消息给接收者: " + messageDTO.getToTargetId());
                 messagingTemplate.convertAndSendToUser(
                     messageDTO.getToTargetId(), 
-                    "/queue/messages", 
+                    "/user/queue/messages", 
                     messageDTO
                 );
+                
+                System.out.println("[WebSocket] 消息推送完成");
             } else {
-                System.err.println("保存消息到数据库失败");
+                System.err.println("[WebSocket] 保存消息到数据库失败");
             }
         } catch (Exception e) {
-            System.err.println("处理聊天消息时出错: " + e.getMessage());
+            System.err.println("[WebSocket] 处理聊天消息时出错: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -160,15 +173,9 @@ public class WebSocketController {
 
         messageDTO.setFromUserId(principal.getName());
         messageDTO.setCreatedAt(new Date());
-
-        // 保存消息到数据库
-        messageServer.sendMessage(messageDTO);
-
-        // 广播消息到群组
-        messagingTemplate.convertAndSend(
-            "/group/" + messageDTO.getToTargetId(),
-            messageDTO
-        );
+        
+        // 发送到RabbitMQ队列进行异步处理
+        chatMessageProducer.sendGroupMessage(messageDTO);
     }
 
 

@@ -57,6 +57,22 @@ public class MessageServerImpl implements MessageServer, ApplicationContextAware
         message.setClientTimestamp(messageDTO.getClientTimestamp() != null ? messageDTO.getClientTimestamp() : System.currentTimeMillis());
         message.setCreateTime(new Date());
         message.setUpdateTime(new Date());
+        // 设置目标类型为group
+        message.setToTargetType("group");
+        
+        // 处理图片URL，将其转换为相对路径存储在数据库中
+        if (messageDTO.getImageUrls() != null && !messageDTO.getImageUrls().isEmpty()) {
+            // 直接转换为相对路径
+            String relativePath = ossUtil.extractObjectNameFromUrl(messageDTO.getImageUrls());
+            message.setImageUrls(relativePath);
+        }
+        
+        // 设置发送者用户名
+        User sender = userMapper.selectById(messageDTO.getFromUserId());
+        if (sender != null) {
+            message.setFromUsername(sender.getUserName());
+        }
+        
         messageMapper.insert(message);
         return true;
     }

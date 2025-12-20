@@ -8,6 +8,7 @@ public class MessageDTO {
     private String messageId;
     private String type;
     private String fromUserId;
+    private String fromUsername; // 添加发送者用户名字段
     private String toTargetId;
     private String toTargetType;
     private String textContent;
@@ -37,4 +38,7 @@ public class MessageDTO {
     private String quoteMessageFileUrl; // 被引用文件消息的URL
     private String quoteMessageFileName; // 被引用文件消息的文件名
     private Long quoteMessageFileSize; // 被引用文件消息的文件大小
+    
+    // 添加用户头像URL字段
+    private String userAvatarUrl;
 }

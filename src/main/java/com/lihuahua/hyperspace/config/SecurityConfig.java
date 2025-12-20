@@ -38,7 +38,7 @@ public class SecurityConfig {
                         .requestMatchers("/user/login", "/user/register", "/user/refresh").permitAll()
                         // 2. WebSocket端点
                         .requestMatchers("/ws/**").permitAll()
-                        .requestMatchers("/api/groups/**").permitAll()
+                        .requestMatchers("/groups/**").permitAll()
                         // 3. 静态资源
                         .requestMatchers("/uploads/**").permitAll()
                         // 4. 文件上传接口

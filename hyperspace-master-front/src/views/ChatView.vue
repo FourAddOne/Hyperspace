@@ -274,23 +274,26 @@ const handleUserStatusChange = (data: any) => {
 
 // 处理实时消息
 const handleRealTimeMessage = (message: any) => {
-  console.log('收到实时消息:', message);
-  console.log('引用消息ID:', message.quoteMessageId);
-  console.log('引用消息内容:', message.quoteMessageContent);
-  console.log('引用消息发送者:', message.quoteMessageSenderName);
+  console.log('[ChatView] 收到实时消息:', message);
+  console.log('[ChatView] 引用消息ID:', message.quoteMessageId);
+  console.log('[ChatView] 引用消息内容:', message.quoteMessageContent);
+  console.log('[ChatView] 引用消息发送者:', message.quoteMessageSenderName);
 
   // 检查消息是否已存在（避免重复显示）
   const exists = messages.value.some(msg => msg.messageId === message.messageId);
   if (exists) {
-    console.log('消息已存在，跳过:', message.messageId);
+    console.log('[ChatView] 消息已存在，跳过:', message.messageId);
     return;
   }
 
   // 确定对话伙伴ID（不是当前用户ID的另一个用户）
   const partnerId = message.fromUserId === getUserInfo()?.userId ? message.toTargetId : message.fromUserId;
+  console.log('[ChatView] 对话伙伴ID:', partnerId);
+  console.log('[ChatView] 当前活跃会话ID:', activeConversation.value?.id);
 
   // 处理当前活跃会话的消息
   if (activeConversation.value && activeConversation.value.id === partnerId) {
+    console.log('[ChatView] 处理当前活跃会话的消息');
     // 添加消息到列表
     const newMsg: any = {
       messageId: message.messageId,
@@ -311,7 +314,7 @@ const handleRealTimeMessage = (message: any) => {
       quoteMessageFileSize: message.quoteMessageFileSize || null
     };
     
-    console.log('处理后的消息对象:', newMsg);
+    console.log('[ChatView] 处理后的消息对象:', newMsg);
 
     // 根据消息类型添加特定字段
     if (message.type === 'image') {
@@ -351,8 +354,10 @@ const handleRealTimeMessage = (message: any) => {
   }
 
   // 更新会话列表中的最后消息（无论是否是当前会话）
+  console.log('[ChatView] 更新会话列表中的最后消息');
   conversations.value = conversations.value.map(conversation => {
     if (conversation.id === partnerId) {
+      console.log('[ChatView] 找到对应的会话，更新最后消息');
       let lastMessage = message.textContent;
       if (message.type === 'image') {
         lastMessage = '[图片]';
@@ -371,6 +376,7 @@ const handleRealTimeMessage = (message: any) => {
 
   // 如果不是当前会话的消息，增加未读计数
   if (!activeConversation.value || activeConversation.value.id !== partnerId) {
+    console.log('[ChatView] 不是当前会话的消息，增加未读计数');
     const currentCount = unreadCounts.value.get(partnerId) || 0;
     unreadCounts.value.set(partnerId, currentCount + 1);
   }
@@ -378,6 +384,7 @@ const handleRealTimeMessage = (message: any) => {
 
 // 选择会话
 const selectConversation = async (conversation: any) => {
+  console.log('[ChatView] 选择会话:', conversation);
   activeConversation.value = conversation
   // 清除未读计数
   unreadCounts.value.delete(conversation.id);
@@ -398,11 +405,12 @@ const selectConversation = async (conversation: any) => {
 // 加载消息
 const loadMessages = async (conversationId: string) => {
   try {
+    console.log('[ChatView] 开始加载消息，会话ID:', conversationId);
     const response = await apiClient.get(API_ENDPOINTS.MESSAGE_HISTORY, {
       params: { friendId: conversationId }
     })
 
-    console.log('加载消息历史:', response);
+    console.log('[ChatView] 加载消息历史:', response);
 
     // 确保响应数据存在且为数组
     if (response && Array.isArray(response.data)) {
@@ -437,6 +445,7 @@ const loadMessages = async (conversationId: string) => {
 
         return baseMessage;
       });
+      console.log('[ChatView] 消息列表更新完成，共', messages.value.length, '条消息');
     } else {
       // 如果没有消息或响应格式不正确，初始化为空数组
       messages.value = []
@@ -842,6 +851,93 @@ const sendFileMessage = async (file: File) => {
   }
 };
 
+// 发送消息
+// const sendMessage = async () => {
+//   if (!newMessage.value.trim() || !activeConversation.value) {
+//     return;
+//   }
+//
+//   try {
+//     console.log('[ChatView] 发送消息');
+//     // 如果有选中的图片，则发送图片消息
+//     if (selectedImage.value) {
+//       await sendImageMessage();
+//       return;
+//     }
+//
+//     // 构造本地消息对象（用于立即显示）
+//     const localMessage: Message = {
+//       messageId: 'temp_' + Date.now().toString(), // 临时ID
+//       type: 'text',
+//       text: newMessage.value,
+//       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // 修复时间格式
+//       isSent: true,
+//       showDate: false,
+//       createdAt: new Date().toISOString(),
+//       clientTimestamp: Date.now() // 添加客户端时间戳
+//     };
+//
+//     // 如果有引用消息，添加引用相关信息
+//     if (quotedMessage.value) {
+//       localMessage.quoteMessageId = quotedMessage.value.messageId;
+//       localMessage.quoteMessageContent = quotedMessage.value.text;
+//       localMessage.quoteMessageSenderName = quotedMessage.value.isSent ?
+//         getUserInfo()?.userName : activeConversation.value.name;
+//
+//       // 根据被引用消息类型设置quoteMessageType
+//       if (quotedMessage.value.type === 'image') {
+//         localMessage.quoteMessageType = 'image';
+//         localMessage.quoteMessageImageUrl = getImageUrl(quotedMessage.value.imageUrls || '');
+//       } else if (quotedMessage.value.type === 'file') {
+//         localMessage.quoteMessageType = 'file';
+//         localMessage.quoteMessageFileName = quotedMessage.value.fileName;
+//         localMessage.quoteMessageFileSize = quotedMessage.value.fileSize;
+//         localMessage.quoteMessageFileUrl = quotedMessage.value.fileUrl;
+//       } else {
+//         localMessage.quoteMessageType = 'text';
+//       }
+//     }
+//
+//     // 立即添加到消息列表（优化用户体验）
+//     messages.value.push(localMessage);
+//
+//     // 滚动到底部
+//     scrollToBottom();
+//
+//     // 通过WebSocket发送消息而不是HTTP请求
+//     if (globalWebSocketManager.isConnected()) {
+//       const messageToSend: SendMessage = {
+//         type: 'text',
+//         toTargetId: activeConversation.value.id,
+//         toTargetType: 'user',
+//         textContent: newMessage.value,
+//         clientTimestamp: Date.now()
+//       };
+//
+//       // 如果有引用消息，添加引用相关信息
+//       if (quotedMessage.value) {
+//         messageToSend.quoteMessageId = quotedMessage.value.messageId;
+//       }
+//
+//       console.log('[ChatView] 通过WebSocket发送消息:', messageToSend);
+//       globalWebSocketManager.sendMessage(messageToSend);
+//     } else {
+//       ElMessage.error('WebSocket未连接，无法发送消息');
+//       // 如果发送失败，从消息列表中移除本地消息
+//       const index = messages.value.findIndex((msg: Message) => msg.messageId === localMessage.messageId);
+//       if (index !== -1) {
+//         messages.value.splice(index, 1);
+//       }
+//     }
+//
+//     // 清空输入框和引用消息
+//     newMessage.value = '';
+//     quotedMessage.value = null;
+//   } catch (error: any) {
+//     ElMessage.error('发送消息时出错: ' + (error.message || '未知错误'));
+//   }
+// }
+
 // 获取图片URL
 const getImageUrl = (imageUrls: string): string => {
   // 现在直接返回图片URL字符串，而不是解析JSON数组
@@ -886,12 +982,14 @@ const scrollToBottom = () => {
 
 // 监听路由变化
 watch(() => route.path, (newPath) => {
+  console.log('[ChatView] 路由变化:', newPath);
   if (newPath === '/chat') {
     // 检查是否有从好友列表传递过来的选中好友
     const selectedFriend = localStorage.getItem('selectedFriendForChat');
     if (selectedFriend) {
       try {
         const friend = JSON.parse(selectedFriend);
+        console.log('[ChatView] 从localStorage获取选中好友:', friend);
         // 创建一个临时会话对象
         const tempConversation = {
           id: friend.userId,
@@ -908,7 +1006,7 @@ watch(() => route.path, (newPath) => {
         // 清除localStorage中的临时数据
         localStorage.removeItem('selectedFriendForChat');
       } catch (e) {
-        console.error('解析选中好友信息失败:', e);
+        console.error('[ChatView] 解析选中好友信息失败:', e);
       }
     }
   }
@@ -917,7 +1015,9 @@ watch(() => route.path, (newPath) => {
 // 加载会话列表
 const loadConversations = async () => {
   try {
+    console.log('[ChatView] 开始加载会话列表');
     const response = await apiClient.get(API_ENDPOINTS.FRIENDS_LIST)
+    console.log('[ChatView] 会话列表加载完成:', response);
     conversations.value = response.data.map((friend: any) => ({
       id: friend.userId,
       name: friend.remark || friend.userName,
@@ -930,9 +1030,11 @@ const loadConversations = async () => {
     // 获取未读消息数量
     if (conversations.value.length > 0) {
       const friendIds = conversations.value.map((conv: any) => conv.id);
+      console.log('[ChatView] 开始获取未读消息数量，好友IDs:', friendIds);
       const unreadResponse = await apiClient.get(API_ENDPOINTS.MESSAGE_UNREAD_COUNTS, {
         params: { friendIds }
       });
+      console.log('[ChatView] 未读消息数量获取完成:', unreadResponse);
 
       if (unreadResponse && unreadResponse.data) {
         // 更新未读消息计数
@@ -945,7 +1047,7 @@ const loadConversations = async () => {
       }
     }
   } catch (error: any) {
-    console.error('加载会话列表失败:', error)
+    console.error('[ChatView] 加载会话列表失败:', error)
     ElMessage.error('加载会话列表失败: ' + error.message)
   }
 }
@@ -953,16 +1055,19 @@ const loadConversations = async () => {
 // 标记消息为已读
 const markMessagesAsRead = async (friendId: string) => {
   try {
+    console.log('[ChatView] 标记消息为已读，好友ID:', friendId);
     await apiClient.post(API_ENDPOINTS.MESSAGE_MARK_AS_READ, null, {
       params: { friendId }
     });
+    console.log('[ChatView] 消息标记为已读完成');
   } catch (error) {
-    console.error('标记消息为已读失败:', error);
+    console.error('[ChatView] 标记消息为已读失败:', error);
   }
 }
 
 // 刷新未读消息数量
 const refreshUnreadCounts = async () => {
+  console.log('[ChatView] 刷新未读消息数量');
   if (conversations.value.length > 0) {
     try {
       const friendIds = conversations.value.map((conv: any) => conv.id);
@@ -983,13 +1088,14 @@ const refreshUnreadCounts = async () => {
         });
       }
     } catch (error) {
-      console.error('刷新未读消息数量失败:', error);
+      console.error('[ChatView] 刷新未读消息数量失败:', error);
     }
   }
 }
 
 // 组件挂载
 onMounted(() => {
+  console.log('[ChatView] 组件挂载');
   // 监听全局用户状态变更事件
   window.addEventListener('userStatusChange', handleGlobalUserStatusChange);
 
@@ -1077,14 +1183,14 @@ onActivated(() => {
 });
 // 处理全局用户状态变更事件
 const handleGlobalUserStatusChange = (event: Event) => {
-  console.log('ChatView收到用户状态变更事件');
+  console.log('[ChatView] ChatView收到用户状态变更事件');
   const customEvent = event as CustomEvent;
   handleUserStatusChange(customEvent.detail);
 };
 
 // 处理全局实时消息事件
 const handleGlobalRealTimeMessage = (event: Event) => {
-  console.log('ChatView收到实时消息事件');
+  console.log('[ChatView] ChatView收到实时消息事件');
   const customEvent = event as CustomEvent;
   handleRealTimeMessage(customEvent.detail);
 };
@@ -1140,8 +1246,16 @@ const handleGlobalRealTimeMessage = (event: Event) => {
           </div>
         </div>
         
+        <!-- 占位符界面，当没有选择聊天对象时显示 -->
+        <div class="chat-placeholder" v-if="!activeConversation">
+          <div class="placeholder-content">
+            <div class="placeholder-image-container">
+              <img src="/src/assets/chat.png" alt="聊天占位图" class="placeholder-image" />
+            </div>
+            <p>选择一个聊天或开始新对话</p>
+          </div>
+        </div>
 
-        
         <!-- 背景容器 -->
         <div class="chat-background-container" v-if="activeConversation">
           <!-- 背景图片层 -->
@@ -1166,7 +1280,7 @@ const handleGlobalRealTimeMessage = (event: Event) => {
                 <div 
                   class="message"
                   :class="{ 'sent': message.isSent, 'received': !message.isSent }"
-                  @touchstart.prevent="setQuotedMessage(message)"
+                  @touchstart.passive="setQuotedMessage(message)"
                   @contextmenu.prevent="setQuotedMessage(message)"
                 >
                   <el-avatar v-if="!message.isSent" :src="getFullAvatarUrl(activeConversation.avatar)" class="message-avatar" />
@@ -1319,13 +1433,6 @@ const handleGlobalRealTimeMessage = (event: Event) => {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-          
-          <div class="chat-placeholder" v-else>
-            <div class="placeholder-content">
-              <i class="el-icon-chat-dot-round placeholder-icon"></i>
-              <p>选择一个聊天或开始新对话</p>
             </div>
           </div>
         </div>
@@ -1853,6 +1960,23 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 .placeholder-content {
   text-align: center;
   color: #999;
+  padding: 20px;
+}
+
+.placeholder-image-container {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 220px;
+}
+
+.placeholder-image {
+  width: 200px;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 50%;
+  object-position: 50% 30%;
 }
 
 .dark-mode .placeholder-content {
@@ -1932,12 +2056,14 @@ const handleGlobalRealTimeMessage = (event: Event) => {
 }
 
 .input-container-wrapper {
+  height: 100px;
   display: flex;
   align-items: flex-end;
   position: relative;
 }
 
 .input-and-toolbar-container {
+  height: 80px;
   flex: 1;
   display: flex;
   flex-direction: column;

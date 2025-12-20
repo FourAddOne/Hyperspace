@@ -45,6 +45,8 @@ class WebSocketService {
   private reconnectTimeout: any = null;
   private maxReconnectAttempts = 5;
   private reconnectAttempts = 0;
+  // 存储群组消息回调
+  private groupMessageCallbacks: Map<string, (data: any) => void> = new Map();
 
   // 检查并刷新令牌
   private async checkAndRefreshToken(): Promise<string | null> {
@@ -272,20 +274,24 @@ class WebSocketService {
     }
   }
 
-  // 重新订阅主题
+  // 重新订阅消息
   private resubscribe() {
-    log.debug('重新订阅WebSocket主题');
-    // 取消现有订阅
+    // 清除现有订阅
     this.subscriptions.forEach((subscription, destination) => {
       subscription.unsubscribe();
     });
     this.subscriptions.clear();
 
-    // 重新订阅
+    // 重新订阅用户状态
     this.subscribeToUserStatus();
+
+    // 重新订阅个人消息
     if (this.messageCallback) {
       this.subscribeToMessages();
     }
+    
+    // 重新订阅所有群组消息
+    this.resubscribeGroupMessages();
   }
 
   // 订阅用户状态变更消息
@@ -312,41 +318,110 @@ class WebSocketService {
 
   // 订阅聊天消息
   private subscribeToMessages() {
-    if (!this.client || !this.messageCallback) return;
-    
-    log.debug('订阅聊天消息: /user/queue/messages');
-    const messageSubscription = this.client.subscribe('/user/queue/messages', (message) => {
-      try {
-        const data = JSON.parse(message.body);
-        log.debug('收到聊天消息:', data);
-        if (this.messageCallback) {
-          this.messageCallback(data);
+    if (this.client && this.connected && this.messageCallback) {
+      console.log('[WebSocketService] 开始订阅消息');
+      
+      // 订阅个人消息
+      const personalSubscription = this.client.subscribe(
+        '/user/queue/messages',
+        (message) => {
+          try {
+            console.log('[WebSocketService] 收到STOMP消息:', message);
+            const data = JSON.parse(message.body);
+            log.debug('收到个人消息:', data);
+            console.log('[WebSocketService] 收到个人消息:', data);
+            if (this.messageCallback) {
+              console.log('[WebSocketService] 调用消息回调函数');
+              this.messageCallback(data);
+            }
+          } catch (error) {
+            log.error('解析个人消息时出错:', error);
+            console.error('[WebSocketService] 解析个人消息时出错:', error);
+          }
         }
-      } catch (error) {
-        log.error('解析聊天消息失败:', error);
-      }
-    });
+      );
 
-    if (messageSubscription) {
-      this.subscriptions.set('/user/queue/messages', messageSubscription);
+      // 订阅用户状态变更消息
+      const userStatusSubscription = this.client.subscribe(
+        '/topic/user-status',
+        (message) => {
+          try {
+            const data = JSON.parse(message.body);
+            log.debug('收到用户状态变更消息:', data);
+            console.log('[WebSocketService] 收到用户状态变更消息:', data);
+            if (this.userStatusCallback) {
+              this.userStatusCallback(data);
+            }
+          } catch (error) {
+            log.error('解析用户状态消息时出错:', error);
+            console.error('[WebSocketService] 解析用户状态消息时出错:', error);
+          }
+        }
+      );
+
+      // 存储订阅以便后续取消订阅
+      this.subscriptions.set('/user/queue/messages', personalSubscription);
+      this.subscriptions.set('/topic/user-status', userStatusSubscription);
+      
+      log.info('已订阅聊天消息和个人状态变更');
+      console.log('[WebSocketService] 已订阅聊天消息和个人状态变更');
     }
   }
-
+  
+  // 订阅群组消息
+  subscribeToGroupMessages(groupId: string, callback: (data: any) => void) {
+    if (this.client && this.connected) {
+      const subscriptionPath = `/topic/group/${groupId}`;
+      const subscription = this.client.subscribe(
+        subscriptionPath,
+        (message) => {
+          try {
+            const data = JSON.parse(message.body);
+            log.debug(`收到群组${groupId}消息:`, data);
+            callback(data);
+          } catch (error) {
+            log.error('解析群组消息时出错:', error);
+          }
+        }
+      );
+      
+      // 存储订阅和回调以便后续取消订阅
+      this.subscriptions.set(subscriptionPath, subscription);
+      this.groupMessageCallbacks.set(groupId, callback);
+      log.info(`已订阅群组${groupId}消息`);
+    }
+  }
+  
+  // 取消订阅群组消息
+  unsubscribeFromGroupMessages(groupId: string) {
+    const subscriptionPath = `/topic/group/${groupId}`;
+    const subscription = this.subscriptions.get(subscriptionPath);
+    if (subscription) {
+      subscription.unsubscribe();
+      this.subscriptions.delete(subscriptionPath);
+      this.groupMessageCallbacks.delete(groupId);
+      log.info(`已取消订阅群组${groupId}消息`);
+    }
+  }
+  
+  // 重新订阅所有群组消息
+  private resubscribeGroupMessages() {
+    // 重新订阅所有群组消息
+    this.groupMessageCallbacks.forEach((callback, groupId) => {
+      this.subscribeToGroupMessages(groupId, callback);
+    });
+  }
+  
   // 断开连接
   disconnect() {
-    // 清除重连定时器
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    
-    if (this.client) {
+    if (this.client && this.connected) {
       log.info('断开WebSocket连接');
       // 取消所有订阅
       this.subscriptions.forEach((subscription, destination) => {
         subscription.unsubscribe();
       });
       this.subscriptions.clear();
+      this.groupMessageCallbacks.clear();
 
       // 断开连接
       this.client.deactivate();
@@ -387,13 +462,22 @@ class WebSocketService {
   
   // 发送聊天消息
   sendMessage(message: any) {
+    console.log('[WebSocketService] 发送聊天消息:', message);
     if (this.client && this.connected) {
+      // 根据消息类型选择不同的目的地
+      let destination = '/app/chat';
+      if (message.toTargetType === 'group') {
+        destination = '/app/group/chat';
+      }
+      
+      console.log('[WebSocketService] 发送消息到目的地:', destination);
       this.client.publish({
-        destination: '/app/chat',
+        destination: destination,
         body: JSON.stringify(message)
       });
     } else {
       log.error('WebSocket未连接，无法发送聊天消息');
+      console.error('[WebSocketService] WebSocket未连接，无法发送聊天消息');
     }
   }
 

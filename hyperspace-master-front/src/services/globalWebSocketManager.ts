@@ -5,16 +5,16 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 const log = {
   debug: (...args: any[]) => {
-    // 生产环境不输出调试日志
+    console.debug('[GlobalWebSocketManager][DEBUG]', ...args);
   },
   info: (...args: any[]) => {
-    // 生产环境不输出信息日志
+    console.info('[GlobalWebSocketManager][INFO]', ...args);
   },
   warn: (...args: any[]) => {
-    // 生产环境不输出警告日志
+    console.warn('[GlobalWebSocketManager][WARN]', ...args);
   },
   error: (...args: any[]) => {
-    // 生产环境不输出错误日志
+    console.error('[GlobalWebSocketManager][ERROR]', ...args);
   }
 };
 
@@ -37,10 +37,12 @@ class GlobalWebSocketManager {
   incrementConnection(): void {
     this.connectionCount++;
     log.debug('WebSocket连接计数增加，当前计数:', this.connectionCount);
+    console.log('[GlobalWebSocketManager] WebSocket连接计数增加，当前计数:', this.connectionCount);
     
     // 只有在没有连接时才建立连接
     if (this.connectionCount === 1) {
       log.debug('建立新的WebSocket连接');
+      console.log('[GlobalWebSocketManager] 建立新的WebSocket连接');
       webSocketService.connect(
         this.userStatusCallback || this.defaultUserStatusCallback, 
         this.messageCallback || this.defaultMessageCallback
@@ -52,6 +54,7 @@ class GlobalWebSocketManager {
   decrementConnection(): void {
     this.connectionCount--;
     log.debug('WebSocket连接计数减少，当前计数:', this.connectionCount);
+    console.log('[GlobalWebSocketManager] WebSocket连接计数减少，当前计数:', this.connectionCount);
     
     // 当引用计数为0时，断开连接
     if (this.connectionCount <= 0) {
@@ -64,6 +67,7 @@ class GlobalWebSocketManager {
   // 默认用户状态回调函数
   private defaultUserStatusCallback = (data: any) => {
     log.debug('默认用户状态回调:', data);
+    console.log('[GlobalWebSocketManager] 默认用户状态回调:', data);
     // 通过全局事件发送
     window.dispatchEvent(new CustomEvent('userStatusChange', { detail: data }));
   };
@@ -71,6 +75,7 @@ class GlobalWebSocketManager {
   // 默认消息回调函数
   private defaultMessageCallback = (data: any) => {
     log.debug('默认消息回调:', data);
+    console.log('[GlobalWebSocketManager] 默认消息回调:', data);
     // 通过全局事件发送
     window.dispatchEvent(new CustomEvent('realTimeMessage', { detail: data }));
   };
@@ -78,10 +83,12 @@ class GlobalWebSocketManager {
   // 设置用户状态回调
   setUserStatusCallback(callback: (data: any) => void): void {
     log.debug('设置用户状态回调函数');
+    console.log('[GlobalWebSocketManager] 设置用户状态回调函数');
     this.userStatusCallback = callback;
     // 如果已经连接，更新回调但不重新连接
     if (this.connectionCount > 0) {
       log.debug('WebSocket已连接，更新用户状态回调函数');
+      console.log('[GlobalWebSocketManager] WebSocket已连接，更新用户状态回调函数');
       webSocketService.updateUserStatusCallback(this.userStatusCallback);
     }
   }
@@ -89,10 +96,12 @@ class GlobalWebSocketManager {
   // 设置消息回调
   setMessageCallback(callback: (data: any) => void): void {
     log.debug('设置消息回调函数');
+    console.log('[GlobalWebSocketManager] 设置消息回调函数');
     this.messageCallback = callback;
     // 如果已经连接，更新回调但不重新连接
     if (this.connectionCount > 0) {
       log.debug('WebSocket已连接，更新消息回调函数');
+      console.log('[GlobalWebSocketManager] WebSocket已连接，更新消息回调函数');
       webSocketService.updateMessageCallback(this.messageCallback);
     }
   }
